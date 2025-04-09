@@ -8,12 +8,18 @@ from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 import httpx
 from jose import JWTError, jwt
+from starlette.middleware.sessions import SessionMiddleware
+
 from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
 
+
+# Add this after creating the FastAPI app
 app = FastAPI(title="Objaverse Research Portal")
+# Add this line:
+app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
