@@ -59,8 +59,14 @@ async def get_current_user(request: Request):
     
     # Get token from session
     token = request.session.get("access_token")
+
     if not token:
-        return None
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.replace("Bearer ", "")    
+
+    if not token:
+        raise credentials_exception
     
     try:
         # Verify token
@@ -86,6 +92,11 @@ async def get_current_user(request: Request):
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request, user: Optional[User] = Depends(get_current_user)):
     if not user:
+        return RedirectResponse(url="/login")
+    
+    # Get the token explicitly
+    token = request.session.get('access_token')
+    if not token:
         return RedirectResponse(url="/login")
     
     # Get assigned models for evaluation
@@ -517,7 +528,7 @@ async def create_user(
     async with httpx.AsyncClient() as client:
         headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
         response = await client.post(
-            f"{AUTH_URL}/users",
+            f"{AUTH_URL}/register",
             json={"email": email, "password": password, "role": role},
             headers=headers
         )
@@ -637,6 +648,136 @@ async def export_users_csv(request: Request, user: Optional[User] = Depends(get_
     response.headers["Content-Disposition"] = "attachment; filename=users.csv"
     
     return response
+
+@app.get("/admin/edit_user/{user_id}", response_class=HTMLResponse)
+async def edit_user_page(request: Request, user_id: str, user: Optional[User] = Depends(get_current_user)):
+    if not user or user.role != "admin":
+        return RedirectResponse(url="/login")
+    
+    # Get user details
+    async with httpx.AsyncClient() as client:
+        headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
+        response = await client.get(f"{AUTH_URL}/users/{user_id}", headers=headers)
+        if response.status_code != 200:
+            return RedirectResponse(url="/admin", status_code=303)
+        
+        user_data = response.json()
+    
+    return templates.TemplateResponse(
+        "edit_user.html",
+        {"request": request, "user": user, "edit_user": user_data}
+    )
+
+
+@app.post("/admin/update_user/{user_id}")
+async def update_user(
+    request: Request,
+    user_id: str,
+    email: str = Form(...),
+    password: Optional[str] = Form(None),
+    role: str = Form(...),
+    user: Optional[User] = Depends(get_current_user)
+):
+    if not user or user.role != "admin":
+        return RedirectResponse(url="/login")
+    
+    # Prepare update data
+    update_data = {"email": email, "role": role}
+    
+    # Only include password if it was provided
+    if password and password.strip():
+        update_data["password"] = password
+    
+    # Update user in auth service
+    async with httpx.AsyncClient() as client:
+        headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
+        response = await client.put(
+            f"{AUTH_URL}/register/{user_id}",
+            json=update_data,
+            headers=headers
+        )
+        
+        if response.status_code != 200:
+            # Get user details again to redisplay the form
+            user_response = await client.get(
+                f"{AUTH_URL}/users/{user_id}", 
+                headers=headers
+            )
+            
+            if user_response.status_code == 200:
+                user_data = user_response.json()
+            else:
+                return RedirectResponse(url="/admin", status_code=303)
+                
+            return templates.TemplateResponse(
+                "edit_user.html",
+                {
+                    "request": request, 
+                    "user": user, 
+                    "edit_user": user_data,
+                    "error": "Failed to update user"
+                }
+            )
+    
+    return RedirectResponse(url="/admin?updated=true", status_code=303)
+
+@app.post("/admin/delete_user")
+async def delete_user(
+    request: Request,
+    user_id: str = Form(...),
+    user: Optional[User] = Depends(get_current_user)
+):
+    if not user or user.role != "admin":
+        return RedirectResponse(url="/login")
+    
+    # Prevent self-deletion
+    if user_id == user.userId:
+        # Get all users to render admin page
+        async with httpx.AsyncClient() as client:
+            headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
+            users_response = await client.get(f"{AUTH_URL}/users", headers=headers)
+            if users_response.status_code == 200:
+                users = users_response.json().get("data", [])
+            else:
+                users = []
+                
+        return templates.TemplateResponse(
+            "admin.html",
+            {
+                "request": request, 
+                "user": user, 
+                "users": users,
+                "error": "You cannot delete your own account"
+            }
+        )
+    
+    # Delete user in auth service
+    async with httpx.AsyncClient() as client:
+        headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
+        response = await client.delete(
+            f"{AUTH_URL}/register/{user_id}",
+            headers=headers
+        )
+        
+        if response.status_code != 200 and response.status_code != 204:
+            # Get all users to render admin page again
+            users_response = await client.get(f"{AUTH_URL}/users", headers=headers)
+            if users_response.status_code == 200:
+                users = users_response.json().get("data", [])
+            else:
+                users = []
+                
+            return templates.TemplateResponse(
+                "admin.html",
+                {
+                    "request": request, 
+                    "user": user, 
+                    "users": users,
+                    "error": "Failed to delete user"
+                }
+            )
+    
+    return RedirectResponse(url="/admin?deleted=true", status_code=303)
 
 @app.get("/health")
 def health_check():
