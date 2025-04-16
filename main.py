@@ -132,25 +132,44 @@ async def home(request: Request, user: Optional[User] = Depends(get_current_user
             
             # Calculate average rating if there are completed evaluations
             if completed_count > 0:
-                total_ratings = 0
+                total_score = 0
                 rating_count = 0
                 
-                for eval_data in completed_data:
-                    if "ratings" in eval_data:
-                        for rating_key, rating_value in eval_data["ratings"].items():
-                            total_ratings += rating_value
+                for obj in completed_data:
+                    for rating in obj.get("ratings", []):
+                        if rating.get("userId") == user.userId and "score" in rating and "metric" in rating:
+                            total_score += rating.get("score", 0)
                             rating_count += 1
                 
                 if rating_count > 0:
-                    avg_rating = round(total_ratings / rating_count, 1)
+                    avg_rating = round(total_score / rating_count, 1)
     
     # Get recent completed evaluations (limited to 3)
     recent_completed = []
     
     if completed_count > 0:
         # Sort by completion date (newest first) and take first 3
-        sorted_completed = sorted(completed_data, key=lambda x: x.get("completedAt", ""), reverse=True)
+        sorted_completed = sorted(
+            completed_data, 
+            key=lambda x: next((a.get("completedAt", "") for a in x.get("assignments", []) 
+                if a.get("userId") == user.userId), ""),
+            reverse=True
+        )
         recent_completed = sorted_completed[:3]
+        
+        # Add formatted user ratings to each object for display
+        for obj in recent_completed:
+            metric_ratings = {
+                "accuracy": "N/A", 
+                "completeness": "N/A", 
+                "clarity": "N/A"
+            }
+            
+            for rating in obj.get("ratings", []):
+                if rating.get("userId") == user.userId and rating.get("metric") in metric_ratings:
+                    metric_ratings[rating.get("metric")] = rating.get("score", "N/A")
+            
+            obj["metric_ratings"] = metric_ratings
     
     return templates.TemplateResponse(
         "home.html",
