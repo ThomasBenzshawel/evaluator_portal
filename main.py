@@ -247,43 +247,79 @@ async def submit_evaluation(
     if not user:
         return RedirectResponse(url="/login")
     
-    # Submit evaluation to API
+    # Track if any ratings fail
+    all_ratings_successful = True
+    error_message = ""
+    
     async with httpx.AsyncClient() as client:
         headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
-        evaluation_data = {
-            "objectId": object_id,
-            "userId": user.userId,
-            "ratings": {
-                "accuracy": accuracy,
-                "completeness": completeness,
-                "clarity": clarity
-            },
-            "comments": comments
-        }
         
-        response = await client.post(
-            f"{API_URL}/api/evaluations",
-            json=evaluation_data,
+        # Submit accuracy rating
+        accuracy_data = {
+            "score": accuracy,
+            "metric": "accuracy",
+            "comment": comments if comments else None
+        }
+        accuracy_response = await client.post(
+            f"{API_URL}/api/objects/{object_id}/rate",
+            json=accuracy_data,
             headers=headers
         )
         
-        if response.status_code != 200 and response.status_code != 201:
-            async with httpx.AsyncClient() as obj_client:
-                obj_response = await obj_client.get(
-                    f"{API_URL}/api/objects/{object_id}",
-                    headers=headers
-                )
-                object_data = obj_response.json().get("data", {})
-                
-            return templates.TemplateResponse(
-                "evaluate.html",
-                {
-                    "request": request,
-                    "user": user,
-                    "object": object_data,
-                    "error": "Failed to submit evaluation"
-                }
+        if accuracy_response.status_code not in [200, 201]:
+            all_ratings_successful = False
+            error_message += f"Accuracy rating failed. "
+        
+        # Submit completeness rating
+        completeness_data = {
+            "score": completeness,
+            "metric": "completeness",
+            "comment": None
+        }
+        completeness_response = await client.post(
+            f"{API_URL}/api/objects/{object_id}/rate",
+            json=completeness_data,
+            headers=headers
+        )
+        
+        if completeness_response.status_code not in [200, 201]:
+            all_ratings_successful = False
+            error_message += f"Completeness rating failed. "
+        
+        # Submit clarity rating
+        clarity_data = {
+            "score": clarity,
+            "metric": "clarity", 
+            "comment": None
+        }
+        clarity_response = await client.post(
+            f"{API_URL}/api/objects/{object_id}/rate",
+            json=clarity_data,
+            headers=headers
+        )
+        
+        if clarity_response.status_code not in [200, 201]:
+            all_ratings_successful = False
+            error_message += f"Clarity rating failed. "
+    
+    if not all_ratings_successful:
+        async with httpx.AsyncClient() as obj_client:
+            headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
+            obj_response = await obj_client.get(
+                f"{API_URL}/api/objects/{object_id}",
+                headers=headers
             )
+            object_data = obj_response.json().get("data", {})
+        
+        return templates.TemplateResponse(
+            "evaluate.html",
+            {
+                "request": request,
+                "user": user,
+                "object": object_data,
+                "error": f"Failed to submit evaluation: {error_message}"
+            }
+        )
     
     return RedirectResponse(url="/", status_code=303)
 

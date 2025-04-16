@@ -61,6 +61,34 @@
             max-width: 100%;
             border-radius: 0.375rem;
         }
+
+        .custom-carousel-control {
+            background-color: #1e3a8a;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0.8;
+        }
+
+        .custom-carousel-control:hover,
+        .custom-carousel-control:focus {
+            background-color: #1e3a8a;
+            opacity: 1;
+        }
+
+        .carousel-control-prev {
+            left: 10px;
+        }
+
+        .carousel-control-next {
+            right: 10px;
+        }
+        
     </style>
 </head>
 <body>
@@ -167,11 +195,11 @@
                                                 </div>
                                                 {% endfor %}
                                             </div>
-                                            <button class="carousel-control-prev" type="button" data-bs-target="#objectImageCarousel" data-bs-slide="prev">
+                                            <button class="carousel-control-prev custom-carousel-control" type="button" data-bs-target="#objectImageCarousel" data-bs-slide="prev">
                                                 <span class="carousel-control-prev-icon" aria-hidden="true"></span>
                                                 <span class="visually-hidden">Previous</span>
                                             </button>
-                                            <button class="carousel-control-next" type="button" data-bs-target="#objectImageCarousel" data-bs-slide="next">
+                                            <button class="carousel-control-next custom-carousel-control" type="button" data-bs-target="#objectImageCarousel" data-bs-slide="next">
                                                 <span class="carousel-control-next-icon" aria-hidden="true"></span>
                                                 <span class="visually-hidden">Next</span>
                                             </button>
@@ -240,11 +268,6 @@
                                                 <label for="clarity-1"><i class="bi bi-star-fill"></i></label>
                                             </div>
                                             <div class="form-text">How clear and understandable is the description?</div>
-                                        </div>
-                                        
-                                        <div class="mb-4">
-                                            <label for="comments" class="form-label">Comments (Optional)</label>
-                                            <textarea class="form-control" id="comments" name="comments" rows="4"></textarea>
                                         </div>
                                         
                                         <button type="submit" class="btn btn-primary">Submit Evaluation</button>
