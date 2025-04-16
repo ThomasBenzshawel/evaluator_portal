@@ -129,17 +129,22 @@ async def home(request: Request, user: Optional[User] = Depends(get_current_user
         if response.status_code == 200:
             completed_data = response.json().get("data", [])
             completed_count = len(completed_data)
-            
+
             # Calculate average rating if there are completed evaluations
             if completed_count > 0:
                 total_score = 0
                 rating_count = 0
                 
                 for obj in completed_data:
+                    # Find this user's rating
                     for rating in obj.get("ratings", []):
-                        if rating.get("userId") == user.userId and "score" in rating and "metric" in rating:
-                            total_score += rating.get("score", 0)
-                            rating_count += 1
+                        if rating.get("userId") == user.userId:
+                            # Calculate average across all three metrics plus the main score
+                            metrics_to_count = ["accuracy", "completeness", "clarity"]
+                            for metric in metrics_to_count:
+                                if metric in rating:
+                                    total_score += rating.get(metric, 0)
+                                    rating_count += 1
                 
                 if rating_count > 0:
                     avg_rating = round(total_score / rating_count, 1)
@@ -159,17 +164,32 @@ async def home(request: Request, user: Optional[User] = Depends(get_current_user
         
         # Add formatted user ratings to each object for display
         for obj in recent_completed:
-            metric_ratings = {
-                "accuracy": "N/A", 
-                "completeness": "N/A", 
-                "clarity": "N/A"
-            }
+            user_metrics = {}
             
+            # Find this user's rating
             for rating in obj.get("ratings", []):
-                if rating.get("userId") == user.userId and rating.get("metric") in metric_ratings:
-                    metric_ratings[rating.get("metric")] = rating.get("score", "N/A")
+                if rating.get("userId") == user.userId:
+                    user_metrics = {
+                        "accuracy": rating.get("accuracy", rating.get("score", 0)), 
+                        "completeness": rating.get("completeness", 0),
+                        "clarity": rating.get("clarity", 0)
+                    }
+                    break
+        
             
-            obj["metric_ratings"] = metric_ratings
+            obj["ratings"] = user_metrics
+
+        print(f"Recent completed evaluations: {recent_completed}")
+        # Fetch object details for each completed evaluation
+        async with httpx.AsyncClient() as client:
+            headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
+            
+            for obj in recent_completed:
+                object_response = await client.get(f"{API_URL}/api/objects/{obj.get('objectId')}", headers=headers)
+                if object_response.status_code == 200:
+                    obj["object"] = object_response.json().get("data", {})
+                else:
+                    obj["object"] = {"category": "Unknown"}  # Default fallback
     
     return templates.TemplateResponse(
         "home.html",
@@ -266,97 +286,87 @@ async def submit_evaluation(
     if not user:
         return RedirectResponse(url="/login")
     
-    # Track if any ratings fail
-    all_ratings_successful = True
-    error_message = ""
-    
+    # Submit evaluation to API
     async with httpx.AsyncClient() as client:
         headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
         
-        # Submit accuracy rating
-        accuracy_data = {
-            "score": accuracy,
-            "metric": "accuracy",
+        # Format rating data to match what the API expects
+        rating_data = {
+            "score": accuracy,  # We'll use accuracy as the primary score
+            "metrics": {
+                "accuracy": accuracy,
+                "completeness": completeness,
+                "clarity": clarity
+            },
             "comment": comments if comments else None
         }
-        accuracy_response = await client.post(
+
+        print(f"Submitting evaluation for object {object_id} with data: {rating_data}")
+        
+        response = await client.post(
             f"{API_URL}/api/objects/{object_id}/rate",
-            json=accuracy_data,
+            json=rating_data,
             headers=headers
         )
         
-        if accuracy_response.status_code not in [200, 201]:
-            all_ratings_successful = False
-            error_message += f"Accuracy rating failed. "
-        
-        # Submit completeness rating
-        completeness_data = {
-            "score": completeness,
-            "metric": "completeness",
-            "comment": None
-        }
-        completeness_response = await client.post(
-            f"{API_URL}/api/objects/{object_id}/rate",
-            json=completeness_data,
-            headers=headers
-        )
-        
-        if completeness_response.status_code not in [200, 201]:
-            all_ratings_successful = False
-            error_message += f"Completeness rating failed. "
-        
-        # Submit clarity rating
-        clarity_data = {
-            "score": clarity,
-            "metric": "clarity", 
-            "comment": None
-        }
-        clarity_response = await client.post(
-            f"{API_URL}/api/objects/{object_id}/rate",
-            json=clarity_data,
-            headers=headers
-        )
-        
-        if clarity_response.status_code not in [200, 201]:
-            all_ratings_successful = False
-            error_message += f"Clarity rating failed. "
-    
-    if not all_ratings_successful:
-        async with httpx.AsyncClient() as obj_client:
-            headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
-            obj_response = await obj_client.get(
-                f"{API_URL}/api/objects/{object_id}",
-                headers=headers
+        if response.status_code != 200 and response.status_code != 201:
+            async with httpx.AsyncClient() as obj_client:
+                obj_response = await obj_client.get(
+                    f"{API_URL}/api/objects/{object_id}",
+                    headers=headers
+                )
+                object_data = obj_response.json().get("data", {})
+                
+            return templates.TemplateResponse(
+                "evaluate.html",
+                {
+                    "request": request,
+                    "user": user,
+                    "object": object_data,
+                    "error": f"Failed to submit evaluation: {response.text}"
+                }
             )
-            object_data = obj_response.json().get("data", {})
-        
-        return templates.TemplateResponse(
-            "evaluate.html",
-            {
-                "request": request,
-                "user": user,
-                "object": object_data,
-                "error": f"Failed to submit evaluation: {error_message}"
-            }
-        )
     
     return RedirectResponse(url="/", status_code=303)
-
 
 @app.get("/review/{object_id}", response_class=HTMLResponse)
 async def review_object(request: Request, object_id: str, user: Optional[User] = Depends(get_current_user)):
     if not user:
         return RedirectResponse(url="/login")
-    
+   
     # Get object details
     async with httpx.AsyncClient() as client:
         headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
         response = await client.get(f"{API_URL}/api/objects/{object_id}", headers=headers)
         if response.status_code != 200:
             raise HTTPException(status_code=404, detail="Object not found")
-        
+       
         object_data = response.json().get("data", {})
-    
+        
+        # Find this user's rating
+        user_metrics = {}
+        completed_at = None
+        comments = None
+        
+        for rating in object_data.get("ratings", []):
+            if rating.get("userId") == user.userId:
+                user_metrics = {
+                    "accuracy": rating.get("accuracy", rating.get("score", 0)),
+                    "completeness": rating.get("completeness", 0),
+                    "clarity": rating.get("clarity", 0)
+                }
+                # Get the completion timestamp and comments if available
+                completed_at = rating.get("timestamp", None)
+                comments = rating.get("comment")
+                break
+        
+        # Structure the data correctly for the template
+        object_data["evaluation"] = {
+            "ratings": user_metrics,
+            "completedAt": completed_at,
+            "comments": comments
+        }
+   
     return templates.TemplateResponse(
         "review.html",
         {"request": request, "user": user, "object": object_data}
