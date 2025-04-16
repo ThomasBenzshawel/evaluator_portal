@@ -154,7 +154,28 @@
                                     
                                     {% if object.images and object.images|length > 0 %}
                                     <div class="mb-4">
-                                        <img src="{{ object.images[0].url }}" alt="{{ object.category }}" class="object-image">
+                                        <div id="objectImageCarousel" class="carousel slide" data-bs-ride="false">
+                                            <div class="carousel-indicators">
+                                                {% for image in object.images %}
+                                                <button type="button" data-bs-target="#objectImageCarousel" data-bs-slide-to="{{ loop.index0 }}" {% if loop.first %}class="active" aria-current="true"{% endif %} aria-label="Slide {{ loop.index }}"></button>
+                                                {% endfor %}
+                                            </div>
+                                            <div class="carousel-inner">
+                                                {% for image in object.images %}
+                                                <div class="carousel-item {% if loop.first %}active{% endif %}">
+                                                    <img src="{{ image.url }}" class="d-block w-100 object-image" alt="{{ object.category }} - Image {{ loop.index }}">
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                            <button class="carousel-control-prev" type="button" data-bs-target="#objectImageCarousel" data-bs-slide="prev">
+                                                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                                                <span class="visually-hidden">Previous</span>
+                                            </button>
+                                            <button class="carousel-control-next" type="button" data-bs-target="#objectImageCarousel" data-bs-slide="next">
+                                                <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                                                <span class="visually-hidden">Next</span>
+                                            </button>
+                                        </div>
                                     </div>
                                     {% endif %}
                                     

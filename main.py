@@ -22,8 +22,14 @@ SECRET_KEY = os.getenv("JWT_SECRET")
 
 # Add this after creating the FastAPI app
 app = FastAPI(title="Objaverse Research Portal")
+
 # Add this line:
-app.add_middleware(SessionMiddleware, secret_key=SECRET_KEY)
+app.add_middleware(
+    SessionMiddleware, 
+    secret_key=SECRET_KEY,
+    session_cookie="objaverse_session",
+    max_age=3600  # 1 hour
+)
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -51,12 +57,6 @@ class Token(BaseModel):
 
 # Authentication dependency
 async def get_current_user(request: Request):
-    credentials_exception = HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Could not validate credentials",
-        headers={"WWW-Authenticate": "Bearer"},
-    )
-    
     # Get token from session
     token = request.session.get("access_token")
 
@@ -66,7 +66,9 @@ async def get_current_user(request: Request):
             token = auth_header.replace("Bearer ", "")    
 
     if not token:
-        raise credentials_exception
+        print("No token found in session or header")
+        # Return None instead of raising an exception
+        return None
     
     try:
         # Verify token
@@ -87,7 +89,8 @@ async def get_current_user(request: Request):
         return None
     except Exception:
         return None
-
+    
+    
 # Routes
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request, user: Optional[User] = Depends(get_current_user)):
@@ -106,7 +109,15 @@ async def home(request: Request, user: Optional[User] = Depends(get_current_user
         if response.status_code != 200:
             assignments = []
         else:
-            assignments = response.json().get("data", [])
+            temp_assignments = response.json().get("data", [])
+
+            assignments = []
+            for obj in temp_assignments:
+                    # Create assignment object with the expected structure
+                    assignment = {
+                        "object": obj  # Wrap each object in an assignment structure
+                    }
+                    assignments.append(assignment)
     
     # Get completed evaluations count
     completed_count = 0
@@ -154,13 +165,17 @@ async def home(request: Request, user: Optional[User] = Depends(get_current_user
         }
     )
 
+
+@app.get('/favicon.ico', include_in_schema=False)
+async def favicon():
+    return RedirectResponse('/static/favicon.ico')
+
 @app.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request, user: Optional[User] = Depends(get_current_user)):
     if user:
         return RedirectResponse(url="/")
     
     return templates.TemplateResponse("login.html", {"request": request})
-
 @app.post("/login")
 async def login(request: Request, email: str = Form(...), password: str = Form(...)):
     # Call auth service to get token
@@ -172,18 +187,22 @@ async def login(request: Request, email: str = Form(...), password: str = Form(.
             )
             
             if response.status_code != 200:
+                print(f"Auth service login error: {response.status_code} - {response.text}")
                 return templates.TemplateResponse(
                     "login.html",
-                    {"request": request, "error": "Invalid email or password"}
+                    {"request": request, "error": f"Login failed: {response.status_code} - {response.text}"}
                 )
             
             token_data = response.json()
+            print(f"Got token with type: {type(token_data.get('access_token'))}")
             
             # Store token in session
             request.session["access_token"] = token_data["access_token"]
+            print(f"Stored token in session: {request.session.get('access_token') is not None}")
             
             return RedirectResponse(url="/", status_code=303)
     except Exception as e:
+        print(f"Exception during login: {str(e)}")
         return templates.TemplateResponse(
             "login.html",
             {"request": request, "error": str(e)}
@@ -354,7 +373,14 @@ async def assignments_page(request: Request, user: Optional[User] = Depends(get_
         if response.status_code != 200:
             assignments = []
         else:
-            assignments = response.json().get("data", [])
+            temp_assignments = response.json().get("data", [])
+            assignments = []
+            for obj in temp_assignments:
+                # Create assignment object with the expected structure
+                assignment = {
+                    "object": obj  # Wrap each object in an assignment structure
+                }
+                assignments.append(assignment)
     
     return templates.TemplateResponse(
         "assignments.html",
@@ -501,14 +527,14 @@ async def assign_model(
         headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
         response = await client.post(
             f"{API_URL}/api/assignments",
-            json={"userId": user_id, "modelId": model_id},
+            json={"userId": user_id, "objectId": model_id},
             headers=headers
         )
         
         if response.status_code != 200 and response.status_code != 201:
             return templates.TemplateResponse(
                 "admin.html",
-                {"request": request, "user": user, "error": "Failed to assign model"}
+                {"request": request, "user": user, "error": "Failed to assign object"}
             )
     
     return RedirectResponse(url="/admin", status_code=303)
@@ -561,8 +587,9 @@ async def upload_assignments_csv(
         csv_reader = csv.DictReader(csv_file)
         
         for row in csv_reader:
-            if "userId" not in row or "modelId" not in row:
-                errors.append(f"Row {csv_reader.line_num}: Missing required fields (userId, modelId)")
+            if "userId" not in row or "objectId" not in row:
+                print("Missing required fields in row:", row)
+                errors.append(f"Row {csv_reader.line_num}: Missing required fields (userId, objectId)")
                 continue
                 
             # Create assignment
@@ -570,7 +597,7 @@ async def upload_assignments_csv(
                 headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
                 response = await client.post(
                     f"{API_URL}/api/assignments",
-                    json={"userId": row["userId"], "modelId": row["modelId"]},
+                    json={"userId": row["userId"], "objectId": row["objectId"]},
                     headers=headers
                 )
                 
@@ -646,6 +673,74 @@ async def export_users_csv(request: Request, user: Optional[User] = Depends(get_
         media_type="text/csv"
     )
     response.headers["Content-Disposition"] = "attachment; filename=users.csv"
+    
+    return response
+
+# Export all object IDs to CSV
+@app.get("/admin/export_objects")
+async def export_objects_csv(request: Request, user: Optional[User] = Depends(get_current_user)):
+    if not user or user.role != "admin":
+        return RedirectResponse(url="/login")
+    
+    # We'll need to paginate through all objects
+    all_objects = []
+    page = 1
+    limit = 100  # Fetch more objects per request to reduce number of API calls
+    
+    # Get token from session
+    token = request.session.get("access_token")
+    if not token:
+        return templates.TemplateResponse(
+            "admin.html", 
+            {"request": request, "user": user, "error": "Authentication token not found"}
+        )
+    
+    # Paginate through all objects
+    async with httpx.AsyncClient() as client:
+        headers = {"Authorization": f"Bearer {token}"}
+        
+        while True:
+            response = await client.get(f"{API_URL}/api/objects?page={page}&limit={limit}", headers=headers)
+            
+            if response.status_code != 200:
+                return templates.TemplateResponse(
+                    "admin.html", 
+                    {"request": request, "user": user, "error": f"Failed to fetch objects: {response.status_code}"}
+                )
+            
+            data = response.json()
+            objects = data.get("data", [])
+            all_objects.extend(objects)
+            
+            # Check if we've reached the last page
+            if page >= data.get("pages", 0) or len(objects) == 0:
+                break
+                
+            page += 1
+    
+    # Create CSV
+    output = io.StringIO()
+    fieldnames = ["objectId", "description", "category", "averageRating", "createdAt"]
+    writer = csv.DictWriter(output, fieldnames=fieldnames)
+    writer.writeheader()
+    
+    for obj in all_objects:
+        writer.writerow({
+            "objectId": obj.get("objectId", ""),
+            "description": obj.get("description", "")[:100] + "..." if obj.get("description", "") else "",  # Truncate long descriptions
+            "category": obj.get("category", ""),
+            "averageRating": obj.get("averageRating", ""),
+            "createdAt": obj.get("createdAt", "")
+        })
+    
+    output.seek(0)
+    
+    # Return CSV file
+    response = StreamingResponse(
+        iter([output.getvalue()]), 
+        media_type="text/csv"
+    )
+    response.headers["Content-Disposition"] = "attachment; filename=object_ids.csv"
     
     return response
 
