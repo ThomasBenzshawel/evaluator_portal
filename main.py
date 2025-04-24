@@ -222,8 +222,7 @@ async def home(request: Request, user: Optional[User] = Depends(get_current_user
             for obj in recent_completed:
                 user_metrics = {}
                 obj["is_unknown_object"] = False
-
-                
+                        
                 # Find this user's rating
                 for rating in obj.get("ratings", []):
                     if rating.get("userId") == user.userId:
@@ -233,16 +232,14 @@ async def home(request: Request, user: Optional[User] = Depends(get_current_user
                             user_metrics = {"accuracy": 0, "completeness": 0, "clarity": 0}
                         else:
                             user_metrics = {
-                                "accuracy": rating.get("accuracy", rating.get("score", 0)), 
+                                "accuracy": rating.get("accuracy", rating.get("score", 0)),
                                 "completeness": rating.get("completeness", 0),
                                 "clarity": rating.get("clarity", 0)
                             }
-                            
                         break
-                        
-                    obj["ratings"] = user_metrics
-
-
+                
+                # This line should be outside the inner for loop
+                obj["ratings"] = user_metrics
                 # Fetch object details
                 object_response = await client.get(f"{API_URL}/api/objects/{obj.get('objectId')}", headers=headers)
                 if object_response.status_code == 200:
