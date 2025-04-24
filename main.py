@@ -196,13 +196,14 @@ async def home(request: Request, user: Optional[User] = Depends(get_current_user
         rating_count = 0
         
         for obj in completed_data:
+
             # Find this user's rating
             for rating in obj.get("ratings", []):
                 if rating.get("userId") == user.userId:
                     # Check if this is an unknown object
                     if rating.get("metrics", {}).get("unknown_object", False):
                         unknown_count += 1
-                        continue  # Skip unknown objects in rating calculation
+                        break  # Skip further processing for this object
                     
                     # Calculate average across metrics
                     metrics_to_count = ["accuracy", "completeness"]
@@ -213,9 +214,11 @@ async def home(request: Request, user: Optional[User] = Depends(get_current_user
         
         if rating_count > 0:
             avg_rating = round(total_score / rating_count, 1)
-
-        # Also fetch unknown count for unknown objects badge
+        
+        # Calculate unknown percentage
         unknown_percent = round((unknown_count / completed_count) * 100, 1) if completed_count > 0 else 0
+    else:
+        unknown_percent = 0
     
     # Get recent completed evaluations (limited to 3)
     recent_completed = []
@@ -276,7 +279,6 @@ async def home(request: Request, user: Optional[User] = Depends(get_current_user
             "recent_completed": recent_completed
         }
     )
-
 
 @app.get('/favicon.ico', include_in_schema=False)
 async def favicon():
@@ -593,22 +595,22 @@ async def completed_page(request: Request, user: Optional[User] = Depends(get_cu
         {"request": request, "user": user, "evaluations": evaluations}
     )
 
-@app.post("/completed", response_model=List[Dict[str, Any]])
-async def get_completed_evaluations(request: Request, user: Optional[User] = Depends(get_current_user)):
-    if not user:
-        return RedirectResponse(url="/login")
+# @app.post("/completed", response_model=List[Dict[str, Any]])
+# async def get_completed_evaluations(request: Request, user: Optional[User] = Depends(get_current_user)):
+#     if not user:
+#         return RedirectResponse(url="/login")
     
-    # Get completed evaluations for the user
-    async with httpx.AsyncClient() as client:
-        headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
-        response = await client.post(f"{API_URL}/api/completed", json={"userId": user.userId}, headers=headers)
-        if response.status_code != 200:
-            raise HTTPException(status_code=404, detail="Completed evaluations not found")
+#     # Get completed evaluations for the user
+#     async with httpx.AsyncClient() as client:
+#         headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
+#         response = await client.post(f"{API_URL}/api/completed", json={"userId": user.userId}, headers=headers)
+#         if response.status_code != 200:
+#             raise HTTPException(status_code=404, detail="Completed evaluations not found")
         
-        evaluations = response.json().get("data", [])
+#         evaluations = response.json().get("data", [])
     
-    print(f"Completed evaluations: {evaluations}")
-    return evaluations
+#     print(f"Completed evaluations: {evaluations}")
+#     return evaluations
 
 
 @app.get("/completed/{evaluation_id}", response_model=Dict[str, Any])
