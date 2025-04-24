@@ -321,6 +321,8 @@
         const unknownObjectBtn = document.getElementById('unknownObjectBtn');
         if (unknownObjectBtn) {
             unknownObjectBtn.addEventListener('click', function() {
+                // Get reference to the form element - this was missing before
+                const form = document.getElementById('evaluationForm');
                 
                 if (confirm('Are you sure you cannot identify this object? This will mark the evaluation as "unknown" and move to the next assignment.')) {
                     // Add a hidden field to the form to indicate the object is unknown
@@ -335,6 +337,7 @@
                 }
             });
         }
+        
         // Form validation script to ensure all ratings are filled out
         document.addEventListener('DOMContentLoaded', function() {
             const form = document.getElementById('evaluationForm');

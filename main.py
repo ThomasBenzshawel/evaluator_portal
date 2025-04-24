@@ -99,23 +99,38 @@ async def fetch_all_completed_evaluations(access_token, user_id):
         
         # Loop through all pages
         while page <= total_pages:
-            response = await client.post(
-                f"{API_URL}/api/completed?page={page}",
-                json={"userId": user_id},
-                headers=headers
-            )
-            
-            if response.status_code != 200:
-                break
+            try:
+                response = await client.post(
+                    f"{API_URL}/api/completed?page={page}",
+                    json={"userId": user_id},
+                    headers=headers
+                )
                 
-            response_data = response.json()
-            completed_items = response_data.get("data", [])
-            all_completed.extend(completed_items)
-            
-            # Update total pages
-            total_pages = response_data.get("pages", 1)
-            page += 1
+                if response.status_code != 200:
+                    print(f"Error fetching completed evaluations: {response.status_code} - {response.text}")
+                    break
+                    
+                response_data = response.json()
+                completed_items = response_data.get("data", [])
+                all_completed.extend(completed_items)
+                
+                # Update total pages - ensure it's at least the current page if not provided
+                total_pages = max(response_data.get("pages", page), page)
+                
+                # Debug information
+                print(f"Fetched page {page}/{total_pages} of completed evaluations. Items: {len(completed_items)}")
+                
+                # Break if no items were returned, even if pages suggest more
+                if not completed_items:
+                    print(f"No items returned for page {page}, stopping pagination.")
+                    break
+                    
+                page += 1
+            except Exception as e:
+                print(f"Exception fetching completed evaluations: {str(e)}")
+                break
     
+    print(f"Total completed evaluations fetched: {len(all_completed)}")
     return all_completed
 
 # Authentication dependency
