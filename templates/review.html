@@ -55,6 +55,31 @@
             font-size: 1rem;
             margin-bottom: 1rem;
         }
+        /* Add carousel styling */
+        .custom-carousel-control {
+            background-color: #1e3a8a;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+        .custom-carousel-control:hover,
+        .custom-carousel-control:focus {
+            background-color: #1e3a8a;
+            opacity: 1;
+        }
+        .carousel-control-prev {
+            left: 10px;
+        }
+        .carousel-control-next {
+            right: 10px;
+        }
     </style>
 </head>
 <body>
@@ -142,7 +167,34 @@
                                     
                                     {% if object.images and object.images|length > 0 %}
                                     <div class="mb-4">
+                                        <!-- Use a carousel for multiple images -->
+                                        {% if object.images|length > 1 %}
+                                        <div id="objectImageCarousel" class="carousel slide" data-bs-ride="false">
+                                            <div class="carousel-indicators">
+                                                {% for image in object.images %}
+                                                <button type="button" data-bs-target="#objectImageCarousel" data-bs-slide-to="{{ loop.index0 }}" {% if loop.first %}class="active" aria-current="true"{% endif %} aria-label="Slide {{ loop.index }}"></button>
+                                                {% endfor %}
+                                            </div>
+                                            <div class="carousel-inner">
+                                                {% for image in object.images %}
+                                                <div class="carousel-item {% if loop.first %}active{% endif %}">
+                                                    <img src="{{ image.url }}" class="d-block w-100 object-image" alt="{{ object.category }} - Image {{ loop.index }}">
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                            <button class="carousel-control-prev custom-carousel-control" type="button" data-bs-target="#objectImageCarousel" data-bs-slide="prev">
+                                                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                                                <span class="visually-hidden">Previous</span>
+                                            </button>
+                                            <button class="carousel-control-next custom-carousel-control" type="button" data-bs-target="#objectImageCarousel" data-bs-slide="next">
+                                                <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                                                <span class="visually-hidden">Next</span>
+                                            </button>
+                                        </div>
+                                        {% else %}
+                                        <!-- Single image display -->
                                         <img src="{{ object.images[0].url }}" alt="{{ object.category }}" class="object-image">
+                                        {% endif %}
                                     </div>
                                     {% endif %}
                                     
@@ -157,119 +209,102 @@
                                     <h5 class="mb-0">Your Evaluation</h5>
                                 </div>
                                 <div class="card-body">
-                                    <!-- Try multiple methods to find the user rating -->
-                                    {% set is_unknown_object = false %}
-                                    {% set user_rating = null %}
-                                    
-                                    <!-- Method 1: Directly access user_ratings if present -->
-                                    {% if object.user_ratings %}
-                                        {% set user_rating = object.user_ratings %}
-                                    {% endif %}
-                                    
-                                    <!-- Method 2: Loop through ratings to find current user's -->
-                                    {% if user_rating is none and object.ratings %}
+                                    {% if object.ratings %}
+                                        <!-- Simplified approach to find the current user's rating -->
+                                        {% set user_rating = None %}
+                                        {% set is_unknown_object = False %}
+                                        {% set latest_timestamp = "" %}
+                                        
+                                        <!-- Find the most recent rating for the current user -->
                                         {% for rating in object.ratings %}
-                                            <!-- Try multiple formats of user ID comparison -->
-                                            {% if rating.userId|string == user.userId|string or 
-                                                  rating.userId == user.userId or
-                                                  rating.user_id|default('') == user.userId %}
-                                                {% set user_rating = rating %}
-                                                {% if rating.metrics and rating.metrics.unknown_object %}
-                                                    {% set is_unknown_object = true %}
+                                            {% if rating.userId == user.userId %}
+                                                {% if not latest_timestamp or rating.timestamp > latest_timestamp %}
+                                                    {% set user_rating = rating %}
+                                                    {% set latest_timestamp = rating.timestamp %}
+                                                    
+                                                    <!-- Check if this is an unknown object -->
+                                                    {% if rating.metrics and rating.metrics.unknown_object %}
+                                                        {% set is_unknown_object = True %}
+                                                    {% endif %}
                                                 {% endif %}
                                             {% endif %}
                                         {% endfor %}
-                                    {% endif %}
-                                    
-                                    <!-- Alternative unknown_object check at the top level -->
-                                    {% if user_rating and user_rating.unknown_object %}
-                                        {% set is_unknown_object = true %}
-                                    {% endif %}
-                                    
-                                    <!-- Display appropriate content based on findings -->
-                                    {% if is_unknown_object %}
-                                    <div class="alert alert-info mb-4">
-                                        <i class="bi bi-info-circle me-2"></i>
-                                        <strong>Unknown Object:</strong> You indicated that you did not know what this object is.
-                                    </div>
-                                    {% elif user_rating %}
-                                    <div class="mb-4">
-                                        <h6>Accuracy:</h6>
-                                        <div class="rating-display">
-                                            {% set accuracy = user_rating.accuracy|default(user_rating.score)|default(0)|int %}
-                                            {% for i in range(5) %}
-                                                {% if i < accuracy %}
-                                                <i class="bi bi-star-fill"></i>
-                                                {% else %}
-                                                <i class="bi bi-star"></i>
-                                                {% endif %}
-                                            {% endfor %}
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="mb-4">
-                                        <h6>Completeness:</h6>
-                                        <div class="rating-display">
-                                            {% set completeness = user_rating.completeness|default(0)|int %}
-                                            {% for i in range(5) %}
-                                                {% if i < completeness %}
-                                                <i class="bi bi-star-fill"></i>
-                                                {% else %}
-                                                <i class="bi bi-star"></i>
-                                                {% endif %}
-                                            {% endfor %}
-                                        </div>
-                                    </div>
-                                    
-                                    <div class="mb-4">
-                                        <h6>Hallucinated:</h6>
-                                        <div class="mt-2">
-                                            {% if user_rating.metrics and user_rating.metrics.hallucinated %}
-                                                <span class="badge bg-warning">Yes</span>
-                                            {% elif user_rating.hallucinated %}
-                                                <span class="badge bg-warning">Yes</span>
-                                            {% else %}
-                                                <span class="badge bg-success">No</span>
-                                            {% endif %}
-                                        </div>
-                                    </div>
-                                    {% else %}
-                                    <div class="alert alert-warning">
-                                        <strong>No evaluation data found for this object.</strong>
                                         
-                                        <!-- Debug information to help troubleshoot -->
-                                        <div class="mt-3 small">
-                                            <strong>Debug Info:</strong><br>
-                                            User ID: {{ user.userId }}<br>
-                                            Ratings available: {{ object.ratings|length if object.ratings else 0 }}<br>
-                                            Object has assignments: {{ object.assignments|default([])|length > 0 }}<br>
-                                            {% if object.assignments|default([]) %}
-                                                {% for assignment in object.assignments %}
-                                                    {% if assignment.userId|string == user.userId|string and assignment.completedAt %}
-                                                        Assignment completed at: {{ assignment.completedAt }}
+                                        <!-- Display appropriate content based on findings -->
+                                        {% if is_unknown_object %}
+                                            <div class="alert alert-info mb-4">
+                                                <i class="bi bi-info-circle me-2"></i>
+                                                <strong>Unknown Object:</strong> You indicated that you did not know what this object is.
+                                            </div>
+                                        {% elif user_rating %}
+                                            <div class="mb-4">
+                                                <h6>Accuracy:</h6>
+                                                <div class="rating-display">
+                                                    {% set accuracy = user_rating.accuracy|default(user_rating.score)|default(0)|int %}
+                                                    {% for i in range(5) %}
+                                                        {% if i < accuracy %}
+                                                        <i class="bi bi-star-fill"></i>
+                                                        {% else %}
+                                                        <i class="bi bi-star"></i>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="mb-4">
+                                                <h6>Completeness:</h6>
+                                                <div class="rating-display">
+                                                    {% set completeness = user_rating.completeness|default(0)|int %}
+                                                    {% for i in range(5) %}
+                                                        {% if i < completeness %}
+                                                        <i class="bi bi-star-fill"></i>
+                                                        {% else %}
+                                                        <i class="bi bi-star"></i>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </div>
+                                            </div>
+                                            
+                                            <div class="mb-4">
+                                                <h6>Hallucinated:</h6>
+                                                <div class="mt-2">
+                                                    {% if user_rating.metrics and user_rating.metrics.hallucinated is defined %}
+                                                        <span class="badge {% if user_rating.metrics.hallucinated %}bg-warning{% else %}bg-success{% endif %}">
+                                                            {{ "Yes" if user_rating.metrics.hallucinated else "No" }}
+                                                        </span>
+                                                    {% else %}
+                                                        <span class="badge bg-secondary">Not Specified</span>
                                                     {% endif %}
-                                                {% endfor %}
+                                                </div>
+                                            </div>
+                                            
+                                            {% if user_rating.comment %}
+                                            <div class="mb-4">
+                                                <h6>Your Comments:</h6>
+                                                <p class="p-3 bg-light rounded">{{ user_rating.comment }}</p>
+                                            </div>
                                             {% endif %}
+                                            
+                                            <div class="text-muted">
+                                                <small>
+                                                    {% for assignment in object.assignments|default([]) %}
+                                                        {% if assignment.userId == user.userId and assignment.completedAt %}
+                                                            Completed on {{ assignment.completedAt|string|truncate(16, true, "") }}
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </small>
+                                            </div>
+                                        {% else %}
+                                            <div class="alert alert-warning">
+                                                <strong>No evaluation data found for this user.</strong>
+                                                <p class="mt-2 mb-0">Your user ID: {{ user.userId }}</p>
+                                            </div>
+                                        {% endif %}
+                                    {% else %}
+                                        <div class="alert alert-warning">
+                                            <strong>No ratings found for this object.</strong>
                                         </div>
-                                    </div>
                                     {% endif %}
-                                    
-                                    {% if user_rating and user_rating.comment %}
-                                    <div class="mb-4">
-                                        <h6>Your Comments:</h6>
-                                        <p class="p-3 bg-light rounded">{{ user_rating.comment }}</p>
-                                    </div>
-                                    {% endif %}
-                                    
-                                    <div class="text-muted">
-                                        <small>
-                                            {% for assignment in object.assignments|default([]) %}
-                                                {% if assignment.userId|string == user.userId|string and assignment.completedAt %}
-                                                    Completed on {{ assignment.completedAt|string|truncate(16, true, "") }}
-                                                {% endif %}
-                                            {% endfor %}
-                                        </small>
-                                    </div>
                                 </div>
                             </div>
                             
