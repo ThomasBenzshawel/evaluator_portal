@@ -1155,6 +1155,138 @@ async def admin_reviews_page(request: Request, user: Optional[User] = Depends(ge
         {"request": request, "user": user, "users_with_reviews": users_with_reviews}
     )
 
+@app.get("/admin/edit_review/{object_id}", response_class=HTMLResponse)
+async def edit_review_page(request: Request, object_id: str, user: Optional[User] = Depends(get_current_user)):
+    # Check if user is admin
+    if not user or user.role != "admin":
+        return RedirectResponse(url="/login")
+    
+    # Get user_id from query parameter
+    user_id = request.query_params.get("user_id")
+    if not user_id:
+        return RedirectResponse(url=f"/review/{object_id}", status_code=303)
+    
+    # Get object details
+    async with httpx.AsyncClient() as client:
+        headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
+        response = await client.get(f"{API_URL}/api/objects/{object_id}", headers=headers)
+        if response.status_code != 200:
+            raise HTTPException(status_code=404, detail="Object not found")
+        
+        object_data = response.json().get("data", {})
+    
+    # Find the specific rating for the given user
+    user_rating = None
+    for rating in object_data.get("ratings", []):
+        if rating.get("userId") == user_id:
+            user_rating = rating
+            break
+    
+    if not user_rating:
+        return RedirectResponse(url=f"/review/{object_id}", status_code=303)
+    
+    return templates.TemplateResponse(
+        "edit_review.html",
+        {
+            "request": request, 
+            "user": user, 
+            "object": object_data, 
+            "edit_user_id": user_id,
+            "rating": user_rating
+        }
+    )
+
+@app.post("/admin/update_review/{object_id}")
+async def update_review(
+    request: Request,
+    object_id: str,
+    user_id: str = Form(...),
+    accuracy: int = Form(...),
+    completeness: int = Form(...),
+    hallucinated: str = Form(...),
+    comment: str = Form(""),
+    user: Optional[User] = Depends(get_current_user)
+):
+    # Check if user is admin
+    if not user or user.role != "admin":
+        return RedirectResponse(url="/login")
+    
+    # Prepare updated rating data
+    rating_data = {
+        "objectId": object_id,
+        "userId": user_id,
+        "rating": {
+            "accuracy": accuracy,
+            "completeness": completeness,
+            "metrics": {
+                "accuracy": accuracy,
+                "completeness": completeness,
+                "hallucinated": hallucinated == "yes"
+            },
+            "comment": comment if comment.strip() else None
+        }
+    }
+    
+    # Update rating in API
+    async with httpx.AsyncClient() as client:
+        headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
+        
+        response = await client.put(
+            f"{API_URL}/api/ratings/{object_id}/{user_id}",
+            json=rating_data,
+            headers=headers
+        )
+        
+        if response.status_code != 200 and response.status_code != 201:
+            # If update fails, redirect to edit page with error
+            return templates.TemplateResponse(
+                "edit_review.html",
+                {
+                    "request": request, 
+                    "user": user, 
+                    "object_id": object_id,
+                    "edit_user_id": user_id,
+                    "error": f"Failed to update review: {response.text}"
+                }
+            )
+    
+    return RedirectResponse(url=f"/review/{object_id}", status_code=303)
+
+@app.post("/admin/delete_review/{object_id}")
+async def delete_review(
+    request: Request,
+    object_id: str,
+    user_id: str = Form(...),
+    user: Optional[User] = Depends(get_current_user)
+):
+    # Check if user is admin
+    if not user or user.role != "admin":
+        return RedirectResponse(url="/login")
+    
+    # Delete rating in API
+    async with httpx.AsyncClient() as client:
+        headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
+        
+        response = await client.delete(
+            f"{API_URL}/api/ratings/{object_id}/{user_id}",
+            headers=headers
+        )
+        
+        if response.status_code != 200 and response.status_code != 204:
+            # If deletion fails, redirect to review page with error
+            return templates.TemplateResponse(
+                "review.html",
+                {
+                    "request": request, 
+                    "user": user, 
+                    "object_id": object_id,
+                    "error": f"Failed to delete review: {response.text}"
+                }
+            )
+    
+    # Redirect to completed evaluations page after successful deletion
+    return RedirectResponse(url="/completed", status_code=303)
+
 @app.get("/health")
 def health_check():
     return {"status": "ok"}

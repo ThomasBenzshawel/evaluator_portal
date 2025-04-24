@@ -329,8 +329,55 @@
                                         </div>
                                     </div>
                                     
-                                    <a href="#" class="btn btn-outline-warning mb-2 w-100">Edit Evaluation</a>
-                                    <a href="#" class="btn btn-outline-danger w-100">Delete Evaluation</a>
+                                    <!-- Edit button for each user rating -->
+                                    {% if object.ratings %}
+                                        {% for rating in object.ratings %}
+                                            <a href="/admin/edit_review/{{ object.objectId }}?user_id={{ rating.userId }}" 
+                                               class="btn btn-outline-warning mb-2 w-100">
+                                                Edit Rating for {{ rating.userId|truncate(10, True, '...') }}
+                                            </a>
+                                        {% endfor %}
+                                    {% endif %}
+                                    
+                                    <!-- Delete button with modal confirmation -->
+                                    <button type="button" class="btn btn-outline-danger w-100" data-bs-toggle="modal" data-bs-target="#deleteReviewModal">
+                                        Delete Evaluation
+                                    </button>
+                                    
+                                    <!-- Delete Confirmation Modal -->
+                                    <div class="modal fade" id="deleteReviewModal" tabindex="-1" aria-labelledby="deleteReviewModalLabel" aria-hidden="true">
+                                        <div class="modal-dialog">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title" id="deleteReviewModalLabel">Confirm Deletion</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <p>Are you sure you want to delete all ratings for this object?</p>
+                                                    <p class="text-danger">This action cannot be undone.</p>
+                                                    
+                                                    {% if object.ratings and object.ratings|length > 0 %}
+                                                    <div class="mt-3">
+                                                        <h6>Select User Rating to Delete:</h6>
+                                                        <form id="deleteRatingForm" action="/admin/delete_review/{{ object.objectId }}" method="post">
+                                                            <select class="form-select mb-3" name="user_id" required>
+                                                                {% for rating in object.ratings %}
+                                                                <option value="{{ rating.userId }}">
+                                                                    User: {{ rating.userId }} - Rating: {{ rating.accuracy|default(rating.score)|default(0) }}
+                                                                </option>
+                                                                {% endfor %}
+                                                            </select>
+                                                        </form>
+                                                    </div>
+                                                    {% endif %}
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                    <button type="button" class="btn btn-danger" onclick="document.getElementById('deleteRatingForm').submit()">Delete Rating</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
                             {% endif %}
