@@ -645,6 +645,7 @@ async def get_completed_evaluations(request: Request, user: Optional[User] = Dep
         
         evaluations = response.json().get("data", [])
     
+    print(f"Completed evaluations: {evaluations}")
     return evaluations
 
 
