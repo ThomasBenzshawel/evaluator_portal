@@ -157,17 +157,32 @@
                                     <h5 class="mb-0">Your Evaluation</h5>
                                 </div>
                                 <div class="card-body">
-                                    {% if object.evaluation.is_unknown_object %}
+                                    {% set is_unknown_object = false %}
+                                    {% set user_rating = null %}
+                                    
+                                    <!-- Find the user's rating -->
+                                    {% for rating in object.ratings %}
+                                        {% if rating.userId == user.userId %}
+                                            {% set user_rating = rating %}
+                                            {% if rating.metrics and rating.metrics.unknown_object %}
+                                                {% set is_unknown_object = true %}
+                                            {% endif %}
+                                            {% break %}
+                                        {% endif %}
+                                    {% endfor %}
+                                    
+                                    {% if is_unknown_object %}
                                     <div class="alert alert-info mb-4">
                                         <i class="bi bi-info-circle me-2"></i>
                                         <strong>Unknown Object:</strong> You indicated that you did not know what this object is.
                                     </div>
-                                    {% else %}
+                                    {% elif user_rating %}
                                     <div class="mb-4">
                                         <h6>Accuracy:</h6>
                                         <div class="rating-display">
+                                            {% set accuracy = user_rating.accuracy|default(user_rating.score)|default(0) %}
                                             {% for i in range(5) %}
-                                                {% if i < object.evaluation.ratings.accuracy %}
+                                                {% if i < accuracy %}
                                                 <i class="bi bi-star-fill"></i>
                                                 {% else %}
                                                 <i class="bi bi-star"></i>
@@ -179,8 +194,9 @@
                                     <div class="mb-4">
                                         <h6>Completeness:</h6>
                                         <div class="rating-display">
+                                            {% set completeness = user_rating.completeness|default(0) %}
                                             {% for i in range(5) %}
-                                                {% if i < object.evaluation.ratings.completeness %}
+                                                {% if i < completeness %}
                                                 <i class="bi bi-star-fill"></i>
                                                 {% else %}
                                                 <i class="bi bi-star"></i>
@@ -190,28 +206,36 @@
                                     </div>
                                     
                                     <div class="mb-4">
-                                        <h6>Clarity:</h6>
-                                        <div class="rating-display">
-                                            {% for i in range(5) %}
-                                                {% if i < object.evaluation.ratings.clarity %}
-                                                <i class="bi bi-star-fill"></i>
-                                                {% else %}
-                                                <i class="bi bi-star"></i>
-                                                {% endif %}
-                                            {% endfor %}
+                                        <h6>Hallucinated:</h6>
+                                        <div class="mt-2">
+                                            {% if user_rating.metrics and user_rating.metrics.hallucinated %}
+                                                <span class="badge bg-warning">Yes</span>
+                                            {% else %}
+                                                <span class="badge bg-success">No</span>
+                                            {% endif %}
                                         </div>
+                                    </div>
+                                    {% else %}
+                                    <div class="alert alert-warning">
+                                        No evaluation data found for this object.
                                     </div>
                                     {% endif %}
                                     
-                                    {% if object.evaluation.comments %}
+                                    {% if user_rating and user_rating.comment %}
                                     <div class="mb-4">
                                         <h6>Your Comments:</h6>
-                                        <p class="p-3 bg-light rounded">{{ object.evaluation.comments }}</p>
+                                        <p class="p-3 bg-light rounded">{{ user_rating.comment }}</p>
                                     </div>
                                     {% endif %}
                                     
                                     <div class="text-muted">
-                                        <small>Completed on {{ object.evaluation.completedAt }}</small>
+                                        <small>
+                                            {% for assignment in object.assignments %}
+                                                {% if assignment.userId == user.userId and assignment.completedAt %}
+                                                    Completed on {{ assignment.completedAt|string|truncate(16, true, "") }}
+                                                {% endif %}
+                                            {% endfor %}
+                                        </small>
                                     </div>
                                 </div>
                             </div>

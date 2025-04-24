@@ -482,49 +482,11 @@ async def review_object(request: Request, object_id: str, user: Optional[User] =
        
         object_data = response.json().get("data", {})
         
-        # Find this user's rating
-        user_metrics = {}
-        completed_at = None
-        comments = None
-        is_unknown_object = False
-        
-        for rating in object_data.get("ratings", []):
-            if rating.get("userId") == user.userId:
-                # Check if this was marked as an unknown object
-                if rating.get("metrics", {}).get("unknown_object", False):
-                    is_unknown_object = True
-                    # Set default values for unknown object
-                    user_metrics = {
-                        "accuracy": 0,
-                        "completeness": 0,
-                        "clarity": 0
-                    }
-                else:
-                    # Normal evaluation metrics
-                    user_metrics = {
-                        "accuracy": rating.get("accuracy", rating.get("score", 0)), 
-                        "completeness": rating.get("completeness", 0),
-                        "clarity": rating.get("clarity", 0)
-                    }
-                
-                # Get the completion timestamp and comments if available
-                completed_at = rating.get("timestamp", None)
-                comments = rating.get("comment")
-                break
-        
-        # Structure the data correctly for the template
-        object_data["evaluation"] = {
-            "ratings": user_metrics,
-            "completedAt": completed_at,
-            "comments": comments,
-            "is_unknown_object": is_unknown_object
-        }
    
     return templates.TemplateResponse(
         "review.html",
         {"request": request, "user": user, "object": object_data}
     )
-
 
 @app.post("/review/{object_id}")
 async def submit_review(

@@ -147,17 +147,19 @@
                                                 </span>
                                                 {% else %}
                                                 <div class="text-warning">
-                                                    {% if evaluation.ratings %}
-                                                    <div>Accuracy: {{ evaluation.ratings.accuracy }}/5</div>
-                                                    <div>Completeness: {{ evaluation.ratings.completeness }}/5</div>
-                                                    <div>Clarity: {{ evaluation.ratings.clarity }}/5</div>
-                                                    {% else %}
-                                                    N/A
-                                                    {% endif %}
+                                                    {% set user_ratings = evaluation.user_ratings if evaluation.user_ratings else {} %}
+                                                    <div>Accuracy: {{ user_ratings.accuracy|default(0) }}/5</div>
+                                                    <div>Completeness: {{ user_ratings.completeness|default(0) }}/5</div>
                                                 </div>
                                                 {% endif %}
                                             </td>
-                                            <td>{{ evaluation.completedAt }}</td>
+                                            <td>
+                                                {% for assignment in evaluation.assignments %}
+                                                    {% if assignment.userId == user.userId and assignment.completedAt %}
+                                                        {{ assignment.completedAt|string|truncate(16, true, "") }}
+                                                    {% endif %}
+                                                {% endfor %}
+                                            </td>
                                             <td>
                                                 <a href="/review/{{ evaluation.objectId }}" class="btn btn-sm btn-outline-secondary">View Details</a>
                                             </td>
