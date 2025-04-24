@@ -152,7 +152,7 @@
 
                     <!-- Statistics -->
                     <div class="row mb-4">
-                        <div class="col-md-4 mb-4 mb-md-0">
+                        <div class="col-md-3 mb-4 mb-md-0">
                             <div class="card stats-card">
                                 <div class="card-body">
                                     <div class="d-flex justify-content-between align-items-center">
@@ -167,7 +167,7 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-4 mb-4 mb-md-0">
+                        <div class="col-md-3 mb-4 mb-md-0">
                             <div class="card stats-card">
                                 <div class="card-body">
                                     <div class="d-flex justify-content-between align-items-center">
@@ -182,7 +182,22 @@
                                 </div>
                             </div>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-3 mb-4 mb-md-0">
+                            <div class="card stats-card">
+                                <div class="card-body">
+                                    <div class="d-flex justify-content-between align-items-center">
+                                        <div>
+                                            <h6 class="card-subtitle mb-2 text-muted">Unknown Objects</h6>
+                                            <h2 class="card-title mb-0">{{ unknown_count }}</h2>
+                                        </div>
+                                        <div class="fs-1 text-primary">
+                                            <i class="bi bi-question-circle"></i>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-3">
                             <div class="card stats-card">
                                 <div class="card-body">
                                     <div class="d-flex justify-content-between align-items-center">
@@ -255,29 +270,36 @@
                             </thead>
                             <tbody>
                                 {% for evaluation in recent_completed %}
-                                <tr>
-                                    <td><code>{{ evaluation.objectId }}</code></td>
-                                    <td>{{ evaluation.object.category }}</td>
-                                    <td>
-                                        <div class="text-warning">
-                                            {% set avg = (evaluation.ratings.accuracy + evaluation.ratings.completeness + evaluation.ratings.clarity) / 3 %}
-                                            {% for i in range(5) %}
-                                                {% if i < avg|int %}
-                                                    <i class="bi bi-star-fill"></i>
-                                                {% elif i < avg %}
-                                                    <i class="bi bi-star-half"></i>
-                                                {% else %}
-                                                    <i class="bi bi-star"></i>
-                                                {% endif %}
-                                            {% endfor %}
-                                        </div>
-                                    </td>
-                                    <td>{{ evaluation.completedAt }}</td>
-                                    <td>
-                                        <a href="/review/{{ evaluation.objectId }}" class="btn btn-sm btn-outline-secondary">View</a>
-                                    </td>
-                                </tr>
-                                {% endfor %}
+                                    <tr>
+                                        <td><code>{{ evaluation.objectId }}</code></td>
+                                        <td>{{ evaluation.object.category }}</td>
+                                        <td>
+                                            {% if evaluation.is_unknown_object %}
+                                                <span class="badge bg-secondary">
+                                                    <i class="bi bi-question-circle me-1"></i> Unknown Object
+                                                </span>
+                                            {% else %}
+                                                <div class="text-warning">
+                                                    {% set avg = (evaluation.ratings.accuracy + evaluation.ratings.completeness) / 2 %}
+                                                    {% for i in range(5) %}
+                                                        {% if i < avg|int %}
+                                                            <i class="bi bi-star-fill"></i>
+                                                        {% elif i < avg %}
+                                                            <i class="bi bi-star-half"></i>
+                                                        {% else %}
+                                                            <i class="bi bi-star"></i>
+                                                        {% endif %}
+                                                    {% endfor %}
+                                                </div>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ evaluation.completedAt }}</td>
+                                        <td>
+                                            <a href="/review/{{ evaluation.objectId }}" class="btn btn-sm btn-outline-secondary">View</a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}        </div>
+
                             </tbody>
                         </table>
                     </div>

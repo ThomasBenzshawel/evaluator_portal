@@ -55,6 +55,69 @@ class Token(BaseModel):
     access_token: str
     token_type: str
 
+# Function to fetch all assignments for a user
+async def fetch_all_assignments(access_token, user_id):
+    all_assignments = []
+    page = 1
+    total_pages = 1  # Start with 1, will be updated from first response
+    
+    async with httpx.AsyncClient() as client:
+        headers = {"Authorization": f"Bearer {access_token}"}
+        
+        # Loop through all pages
+        while page <= total_pages:
+            response = await client.get(f"{API_URL}/api/assignments?userId={user_id}&page={page}", headers=headers)
+            
+            if response.status_code != 200:
+                break
+                
+            response_data = response.json()
+            page_assignments = response_data.get("data", [])
+            
+            # Process assignments
+            for obj in page_assignments:
+                assignment = {
+                    "object": obj  # Wrap each object in an assignment structure
+                }
+                all_assignments.append(assignment)
+            
+            # Update total pages
+            total_pages = response_data.get("pages", 1)
+            page += 1
+    
+    return all_assignments
+
+
+# Function to fetch all completed evaluations for a user
+async def fetch_all_completed_evaluations(access_token, user_id):
+    all_completed = []
+    page = 1
+    total_pages = 1  # Start with 1, will be updated from first response
+    
+    async with httpx.AsyncClient() as client:
+        headers = {"Authorization": f"Bearer {access_token}"}
+        
+        # Loop through all pages
+        while page <= total_pages:
+            response = await client.post(
+                f"{API_URL}/api/completed?page={page}",
+                json={"userId": user_id},
+                headers=headers
+            )
+            
+            if response.status_code != 200:
+                break
+                
+            response_data = response.json()
+            completed_items = response_data.get("data", [])
+            all_completed.extend(completed_items)
+            
+            # Update total pages
+            total_pages = response_data.get("pages", 1)
+            page += 1
+    
+    return all_completed
+
 # Authentication dependency
 async def get_current_user(request: Request):
     # Get token from session
@@ -103,51 +166,41 @@ async def home(request: Request, user: Optional[User] = Depends(get_current_user
         return RedirectResponse(url="/login")
     
     # Get assigned models for evaluation
-    async with httpx.AsyncClient() as client:
-        headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
-        response = await client.get(f"{API_URL}/api/assignments?userId={user.userId}", headers=headers)
-        if response.status_code != 200:
-            assignments = []
-        else:
-            temp_assignments = response.json().get("data", [])
-
-            assignments = []
-            for obj in temp_assignments:
-                    # Create assignment object with the expected structure
-                    assignment = {
-                        "object": obj  # Wrap each object in an assignment structure
-                    }
-                    assignments.append(assignment)
+    assignments = await fetch_all_assignments(token, user.userId)
     
-    # Get completed evaluations count
-    completed_count = 0
+    # Get completed evaluations for statistics
+    completed_data = await fetch_all_completed_evaluations(token, user.userId)
+    completed_count = len(completed_data)
+
+    # Calculate average rating if there are completed evaluations
     avg_rating = 0
-    
-    async with httpx.AsyncClient() as client:
-        headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
-        response = await client.post(f"{API_URL}/api/completed", json={"userId": user.userId}, headers=headers)
-        if response.status_code == 200:
-            completed_data = response.json().get("data", [])
-            completed_count = len(completed_data)
+    unknown_count = 0
 
-            # Calculate average rating if there are completed evaluations
-            if completed_count > 0:
-                total_score = 0
-                rating_count = 0
-                
-                for obj in completed_data:
-                    # Find this user's rating
-                    for rating in obj.get("ratings", []):
-                        if rating.get("userId") == user.userId:
-                            # Calculate average across all three metrics plus the main score
-                            metrics_to_count = ["accuracy", "completeness", "clarity"]
-                            for metric in metrics_to_count:
-                                if metric in rating:
-                                    total_score += rating.get(metric, 0)
-                                    rating_count += 1
-                
-                if rating_count > 0:
-                    avg_rating = round(total_score / rating_count, 1)
+    if completed_count > 0:
+        total_score = 0
+        rating_count = 0
+        
+        for obj in completed_data:
+            # Find this user's rating
+            for rating in obj.get("ratings", []):
+                if rating.get("userId") == user.userId:
+                    # Check if this is an unknown object
+                    if rating.get("metrics", {}).get("unknown_object", False):
+                        unknown_count += 1
+                        continue  # Skip unknown objects in rating calculation
+                    
+                    # Calculate average across metrics
+                    metrics_to_count = ["accuracy", "completeness"]
+                    for metric in metrics_to_count:
+                        if metric in rating:
+                            total_score += rating.get(metric, 0)
+                            rating_count += 1
+        
+        if rating_count > 0:
+            avg_rating = round(total_score / rating_count, 1)
+
+        # Also fetch unknown count for unknown objects badge
+        unknown_percent = round((unknown_count / completed_count) * 100, 1) if completed_count > 0 else 0
     
     # Get recent completed evaluations (limited to 3)
     recent_completed = []
@@ -162,29 +215,35 @@ async def home(request: Request, user: Optional[User] = Depends(get_current_user
         )
         recent_completed = sorted_completed[:3]
         
-        # Add formatted user ratings to each object for display
-        for obj in recent_completed:
-            user_metrics = {}
-            
-            # Find this user's rating
-            for rating in obj.get("ratings", []):
-                if rating.get("userId") == user.userId:
-                    user_metrics = {
-                        "accuracy": rating.get("accuracy", rating.get("score", 0)), 
-                        "completeness": rating.get("completeness", 0),
-                        "clarity": rating.get("clarity", 0)
-                    }
-                    break
-        
-            
-            obj["ratings"] = user_metrics
-
-        print(f"Recent completed evaluations: {recent_completed}")
-        # Fetch object details for each completed evaluation
+        # Add formatted user ratings to each object for display and fetch object details
         async with httpx.AsyncClient() as client:
-            headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
+            headers = {"Authorization": f"Bearer {token}"}
             
             for obj in recent_completed:
+                user_metrics = {}
+                obj["is_unknown_object"] = False
+
+                
+                # Find this user's rating
+                for rating in obj.get("ratings", []):
+                    if rating.get("userId") == user.userId:
+                        # Check if this was marked as an unknown object
+                        if rating.get("metrics", {}).get("unknown_object", False):
+                            obj["is_unknown_object"] = True
+                            user_metrics = {"accuracy": 0, "completeness": 0, "clarity": 0}
+                        else:
+                            user_metrics = {
+                                "accuracy": rating.get("accuracy", rating.get("score", 0)), 
+                                "completeness": rating.get("completeness", 0),
+                                "clarity": rating.get("clarity", 0)
+                            }
+                            
+                        break
+                        
+                    obj["ratings"] = user_metrics
+
+
+                # Fetch object details
                 object_response = await client.get(f"{API_URL}/api/objects/{obj.get('objectId')}", headers=headers)
                 if object_response.status_code == 200:
                     obj["object"] = object_response.json().get("data", {})
@@ -200,6 +259,8 @@ async def home(request: Request, user: Optional[User] = Depends(get_current_user
             "pending_count": len(assignments),
             "completed_count": completed_count,
             "avg_rating": avg_rating,
+            "unknown_count": unknown_count,
+            "unknown_percent": unknown_percent,
             "recent_completed": recent_completed
         }
     )
@@ -254,49 +315,95 @@ async def logout(request: Request):
     
     return RedirectResponse(url="/login")
 
-@app.get("/evaluate/{object_id}", response_class=HTMLResponse)
-async def evaluate_page(request: Request, object_id: str, user: Optional[User] = Depends(get_current_user)):
-    if not user:
-        return RedirectResponse(url="/login")
-    
-    # Get object details
-    async with httpx.AsyncClient() as client:
-        headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
-        response = await client.get(f"{API_URL}/api/objects/{object_id}", headers=headers)
-        if response.status_code != 200:
-            raise HTTPException(status_code=404, detail="Object not found")
-        
-        object_data = response.json().get("data", {})
-    
-    return templates.TemplateResponse(
-        "evaluate.html",
-        {"request": request, "user": user, "object": object_data}
-    )
-
 @app.post("/evaluate/{object_id}")
 async def submit_evaluation(
     request: Request,
     object_id: str,
-    accuracy: int = Form(...),
-    completeness: int = Form(...),
-    clarity: int = Form(...),
+    accuracy: int = Form(None),
+    completeness: int = Form(None),
+    hallucinated: str = Form(None),
+    unknown_object: str = Form(None),
     comments: str = Form(""),
     user: Optional[User] = Depends(get_current_user)
 ):
     if not user:
         return RedirectResponse(url="/login")
     
-    # Submit evaluation to API
+    # Check if the user indicated they don't know what the object is
+    if unknown_object == "true":
+        # Submit evaluation with special flag for unknown object
+        async with httpx.AsyncClient() as client:
+            headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
+            
+            # Since the API requires score 1-5, use 1 but add metadata
+            rating_data = {
+                "score": 1,  # Use minimum score since API requires 1-5
+                "metrics": {
+                    "unknown_object": True
+                },
+                "comment": "Evaluator indicated they do not know what this object is."
+            }
+            
+            print(f"Submitting 'unknown object' evaluation for object {object_id}")
+            
+            response = await client.post(
+                f"{API_URL}/api/objects/{object_id}/rate",
+                json=rating_data,
+                headers=headers
+            )
+            
+            if response.status_code != 200 and response.status_code != 201:
+                # Handle error case
+                async with httpx.AsyncClient() as obj_client:
+                    obj_response = await obj_client.get(
+                        f"{API_URL}/api/objects/{object_id}",
+                        headers=headers
+                    )
+                    object_data = obj_response.json().get("data", {})
+                    
+                return templates.TemplateResponse(
+                    "evaluate.html",
+                    {
+                        "request": request,
+                        "user": user,
+                        "object": object_data,
+                        "error": f"Failed to submit unknown object evaluation: {response.text}"
+                    }
+                )
+        
+        return RedirectResponse(url="/", status_code=303)
+    
+    # Normal evaluation flow
+    if accuracy is None or completeness is None or hallucinated is None:
+        # Handle missing required fields
+        async with httpx.AsyncClient() as obj_client:
+            headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
+            obj_response = await obj_client.get(
+                f"{API_URL}/api/objects/{object_id}",
+                headers=headers
+            )
+            object_data = obj_response.json().get("data", {})
+            
+        return templates.TemplateResponse(
+            "evaluate.html",
+            {
+                "request": request,
+                "user": user,
+                "object": object_data,
+                "error": "Please fill out all required fields"
+            }
+        )
+    
+    # Submit normal evaluation
     async with httpx.AsyncClient() as client:
         headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
         
-        # Format rating data to match what the API expects
         rating_data = {
-            "score": accuracy,  # We'll use accuracy as the primary score
+            "score": accuracy,
             "metrics": {
                 "accuracy": accuracy,
                 "completeness": completeness,
-                "clarity": clarity
+                "hallucinated": hallucinated == "yes"
             },
             "comment": comments if comments else None
         }
@@ -309,6 +416,7 @@ async def submit_evaluation(
             headers=headers
         )
         
+        # Handle response
         if response.status_code != 200 and response.status_code != 201:
             async with httpx.AsyncClient() as obj_client:
                 obj_response = await obj_client.get(
@@ -347,14 +455,27 @@ async def review_object(request: Request, object_id: str, user: Optional[User] =
         user_metrics = {}
         completed_at = None
         comments = None
+        is_unknown_object = False
         
         for rating in object_data.get("ratings", []):
             if rating.get("userId") == user.userId:
-                user_metrics = {
-                    "accuracy": rating.get("accuracy", rating.get("score", 0)),
-                    "completeness": rating.get("completeness", 0),
-                    "clarity": rating.get("clarity", 0)
-                }
+                # Check if this was marked as an unknown object
+                if rating.get("metrics", {}).get("unknown_object", False):
+                    is_unknown_object = True
+                    # Set default values for unknown object
+                    user_metrics = {
+                        "accuracy": 0,
+                        "completeness": 0,
+                        "clarity": 0
+                    }
+                else:
+                    # Normal evaluation metrics
+                    user_metrics = {
+                        "accuracy": rating.get("accuracy", rating.get("score", 0)), 
+                        "completeness": rating.get("completeness", 0),
+                        "clarity": rating.get("clarity", 0)
+                    }
+                
                 # Get the completion timestamp and comments if available
                 completed_at = rating.get("timestamp", None)
                 comments = rating.get("comment")
@@ -364,13 +485,15 @@ async def review_object(request: Request, object_id: str, user: Optional[User] =
         object_data["evaluation"] = {
             "ratings": user_metrics,
             "completedAt": completed_at,
-            "comments": comments
+            "comments": comments,
+            "is_unknown_object": is_unknown_object
         }
    
     return templates.TemplateResponse(
         "review.html",
         {"request": request, "user": user, "object": object_data}
     )
+
 
 @app.post("/review/{object_id}")
 async def submit_review(
@@ -431,21 +554,7 @@ async def assignments_page(request: Request, user: Optional[User] = Depends(get_
     if not user:
         return RedirectResponse(url="/login")
     
-    # Get assigned models for evaluation
-    async with httpx.AsyncClient() as client:
-        headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
-        response = await client.get(f"{API_URL}/api/assignments?userId={user.userId}", headers=headers)
-        if response.status_code != 200:
-            assignments = []
-        else:
-            temp_assignments = response.json().get("data", [])
-            assignments = []
-            for obj in temp_assignments:
-                # Create assignment object with the expected structure
-                assignment = {
-                    "object": obj  # Wrap each object in an assignment structure
-                }
-                assignments.append(assignment)
+    assignments = await fetch_all_assignments(request.session.get("access_token"), user.userId)
     
     return templates.TemplateResponse(
         "assignments.html",
@@ -474,14 +583,17 @@ async def completed_page(request: Request, user: Optional[User] = Depends(get_cu
     if not user:
         return RedirectResponse(url="/login")
     
-    # Get completed evaluations for the user
-    async with httpx.AsyncClient() as client:
-        headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
-        response = await client.post(f"{API_URL}/api/completed", json={"userId": user.userId}, headers=headers)
-        if response.status_code != 200:
-            evaluations = []
-        else:
-            evaluations = response.json().get("data", [])
+    # Get all completed evaluations for the user
+    token = request.session.get('access_token')
+    evaluations = await fetch_all_completed_evaluations(token, user.userId)
+    
+    # Process evaluations to mark unknown objects
+    for eval in evaluations:
+        for rating in eval.get("ratings", []):
+            if rating.get("userId") == user.userId:
+                # Check if this was marked as an unknown object
+                eval["is_unknown_object"] = rating.get("metrics", {}).get("unknown_object", False)
+                break
     
     return templates.TemplateResponse(
         "completed.html",
@@ -707,38 +819,74 @@ async def upload_assignments_csv(
 async def export_users_csv(request: Request, user: Optional[User] = Depends(get_current_user)):
     if not user or user.role != "admin":
         return RedirectResponse(url="/login")
-    
+   
     # Get all users
     async with httpx.AsyncClient() as client:
         headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
         response = await client.get(f"{AUTH_URL}/users", headers=headers)
         if response.status_code != 200:
             raise HTTPException(status_code=404, detail="Users not found")
-        
+       
         users_data = response.json().get("data", [])
-    
-    # Create CSV
+   
+    # Create CSV with additional fields for unknown object statistics
     output = io.StringIO()
-    fieldnames = ["userId", "email", "role"]
+    fieldnames = ["userId", "email", "role", "total_evaluations", "unknown_objects", "unknown_percent"]
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
-    
+   
+    # For each user, fetch their evaluations to calculate unknown object stats
     for user_item in users_data:
+        user_id = user_item.get("userId", "")
+        
+        # Get completed evaluations for this user
+        async with httpx.AsyncClient() as client:
+            headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
+            response = await client.post(
+                f"{API_URL}/api/completed",
+                json={"userId": user_id},
+                headers=headers
+            )
+            
+            total_evaluations = 0
+            unknown_count = 0
+            unknown_percent = 0
+            
+            if response.status_code == 200:
+                completed_data = response.json().get("data", [])
+                total_evaluations = len(completed_data)
+                
+                # Count unknown objects
+                for obj in completed_data:
+                    for rating in obj.get("ratings", []):
+                        if rating.get("userId") == user_id:
+                            if rating.get("metrics", {}).get("unknown_object", False):
+                                unknown_count += 1
+                            break
+                
+                # Calculate percentage
+                if total_evaluations > 0:
+                    unknown_percent = round((unknown_count / total_evaluations) * 100, 1)
+        
+        # Write user data with stats to CSV
         writer.writerow({
-            "userId": user_item.get("userId", ""),
+            "userId": user_id,
             "email": user_item.get("email", ""),
-            "role": user_item.get("role", "")
+            "role": user_item.get("role", ""),
+            "total_evaluations": total_evaluations,
+            "unknown_objects": unknown_count,
+            "unknown_percent": f"{unknown_percent}%"
         })
-    
+   
     output.seek(0)
-    
+   
     # Return CSV file
     response = StreamingResponse(
-        iter([output.getvalue()]), 
+        iter([output.getvalue()]),
         media_type="text/csv"
     )
-    response.headers["Content-Disposition"] = "attachment; filename=users.csv"
-    
+    response.headers["Content-Disposition"] = "attachment; filename=users_with_stats.csv"
+   
     return response
 
 # Export all object IDs to CSV
@@ -746,67 +894,91 @@ async def export_users_csv(request: Request, user: Optional[User] = Depends(get_
 async def export_objects_csv(request: Request, user: Optional[User] = Depends(get_current_user)):
     if not user or user.role != "admin":
         return RedirectResponse(url="/login")
-    
+   
     # We'll need to paginate through all objects
     all_objects = []
     page = 1
     limit = 100  # Fetch more objects per request to reduce number of API calls
-    
+   
     # Get token from session
     token = request.session.get("access_token")
     if not token:
         return templates.TemplateResponse(
-            "admin.html", 
+            "admin.html",
             {"request": request, "user": user, "error": "Authentication token not found"}
         )
-    
+   
     # Paginate through all objects
     async with httpx.AsyncClient() as client:
         headers = {"Authorization": f"Bearer {token}"}
-        
+       
         while True:
             response = await client.get(f"{API_URL}/api/objects?page={page}&limit={limit}", headers=headers)
-            
+           
             if response.status_code != 200:
                 return templates.TemplateResponse(
-                    "admin.html", 
+                    "admin.html",
                     {"request": request, "user": user, "error": f"Failed to fetch objects: {response.status_code}"}
                 )
-            
+           
             data = response.json()
             objects = data.get("data", [])
             all_objects.extend(objects)
-            
+           
             # Check if we've reached the last page
             if page >= data.get("pages", 0) or len(objects) == 0:
                 break
-                
+               
             page += 1
-    
-    # Create CSV
+   
+    # Create CSV with additional fields for unknown object statistics
     output = io.StringIO()
-    fieldnames = ["objectId", "description", "category", "averageRating", "createdAt"]
+    fieldnames = [
+        "objectId", 
+        "description", 
+        "category", 
+        "averageRating", 
+        "totalEvaluations", 
+        "unknownCount", 
+        "unknownPercent", 
+        "createdAt"
+    ]
     writer = csv.DictWriter(output, fieldnames=fieldnames)
     writer.writeheader()
-    
+   
     for obj in all_objects:
+        # Calculate unknown object stats
+        total_evaluations = len(obj.get("ratings", []))
+        unknown_count = 0
+        
+        for rating in obj.get("ratings", []):
+            if rating.get("metrics", {}).get("unknown_object", False):
+                unknown_count += 1
+        
+        unknown_percent = 0
+        if total_evaluations > 0:
+            unknown_percent = round((unknown_count / total_evaluations) * 100, 1)
+            
         writer.writerow({
             "objectId": obj.get("objectId", ""),
             "description": obj.get("description", "")[:100] + "..." if obj.get("description", "") else "",  # Truncate long descriptions
             "category": obj.get("category", ""),
             "averageRating": obj.get("averageRating", ""),
+            "totalEvaluations": total_evaluations,
+            "unknownCount": unknown_count,
+            "unknownPercent": f"{unknown_percent}%",
             "createdAt": obj.get("createdAt", "")
         })
-    
+   
     output.seek(0)
-    
+   
     # Return CSV file
     response = StreamingResponse(
-        iter([output.getvalue()]), 
+        iter([output.getvalue()]),
         media_type="text/csv"
     )
-    response.headers["Content-Disposition"] = "attachment; filename=object_ids.csv"
-    
+    response.headers["Content-Disposition"] = "attachment; filename=objects_with_stats.csv"
+   
     return response
 
 @app.get("/admin/edit_user/{user_id}", response_class=HTMLResponse)
@@ -945,4 +1117,4 @@ def health_check():
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)))
+    uvicorn.run(app, host="0.0.0.0", port=int(os.getenv("PORT", 8000)), log_level="info", workers=4)

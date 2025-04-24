@@ -277,24 +277,33 @@
                                         </div>
                                         
                                         <div class="mb-4">
-                                            <label class="form-label">Clarity (1-5) <span class="rating-required">*</span></label>
-                                            <div class="rating-container">
-                                                <input type="radio" id="clarity-5" name="clarity" value="5">
-                                                <label for="clarity-5"><i class="bi bi-star-fill"></i></label>
-                                                <input type="radio" id="clarity-4" name="clarity" value="4">
-                                                <label for="clarity-4"><i class="bi bi-star-fill"></i></label>
-                                                <input type="radio" id="clarity-3" name="clarity" value="3">
-                                                <label for="clarity-3"><i class="bi bi-star-fill"></i></label>
-                                                <input type="radio" id="clarity-2" name="clarity" value="2">
-                                                <label for="clarity-2"><i class="bi bi-star-fill"></i></label>
-                                                <input type="radio" id="clarity-1" name="clarity" value="1">
-                                                <label for="clarity-1"><i class="bi bi-star-fill"></i></label>
+                                            <label class="form-label">Did the LLM hallucinate? <span class="rating-required">*</span></label>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="hallucinated" id="hallucinated-yes" value="yes">
+                                                <label class="form-check-label" for="hallucinated-yes">
+                                                    Yes
+                                                </label>
                                             </div>
-                                            <div class="form-text">How clear and understandable is the description?</div>
-                                            <div id="clarity-error" class="rating-error">Please select a clarity rating</div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="hallucinated" id="hallucinated-no" value="no">
+                                                <label class="form-check-label" for="hallucinated-no">
+                                                    No
+                                                </label>
+                                            </div>
+                                            <div class="form-text">Does the description contain information that is not visible in the image?</div>
+                                            <div id="hallucinated-error" class="rating-error">Please select whether the LLM hallucinated</div>
                                         </div>
                                         
+                                        <!--"I don't know what this object is" button -->
+                                        <div class="mb-4">
+                                            <button type="button" class="btn btn-outline-secondary" id="unknownObjectBtn">
+                                                I don't know what this object is
+                                            </button>
+                                            <div class="form-text">Click this if you cannot identify what the object is supposed to be.</div>
+                                        </div>
+                                                
                                         <button type="submit" class="btn btn-primary" id="submitBtn">Submit Evaluation</button>
+                                        
                                     </form>
                                 </div>
                             </div>
@@ -307,6 +316,25 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+
+        // Handle "I don't know what this object is" button
+        const unknownObjectBtn = document.getElementById('unknownObjectBtn');
+        if (unknownObjectBtn) {
+            unknownObjectBtn.addEventListener('click', function() {
+                
+                if (confirm('Are you sure you cannot identify this object? This will mark the evaluation as "unknown" and move to the next assignment.')) {
+                    // Add a hidden field to the form to indicate the object is unknown
+                    const hiddenField = document.createElement('input');
+                    hiddenField.type = 'hidden';
+                    hiddenField.name = 'unknown_object';
+                    hiddenField.value = 'true';
+                    form.appendChild(hiddenField);
+                    
+                    // Submit the form
+                    form.submit();
+                }
+            });
+        }
         // Form validation script to ensure all ratings are filled out
         document.addEventListener('DOMContentLoaded', function() {
             const form = document.getElementById('evaluationForm');
@@ -334,13 +362,13 @@
                     document.getElementById('completeness-error').style.display = 'none';
                 }
                 
-                // Check clarity
-                const claritySelected = document.querySelector('input[name="clarity"]:checked');
-                if (!claritySelected) {
-                    document.getElementById('clarity-error').style.display = 'block';
+                // Check hallucination selection
+                const hallucinatedSelected = document.querySelector('input[name="hallucinated"]:checked');
+                if (!hallucinatedSelected) {
+                    document.getElementById('hallucinated-error').style.display = 'block';
                     isValid = false;
                 } else {
-                    document.getElementById('clarity-error').style.display = 'none';
+                    document.getElementById('hallucinated-error').style.display = 'none';
                 }
                 
                 return isValid;

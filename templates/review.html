@@ -47,6 +47,14 @@
             color: #f8ce0a;
             font-size: 1.5rem;
         }
+        .unknown-object-badge {
+            background-color: #6c757d;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-size: 1rem;
+            margin-bottom: 1rem;
+        }
     </style>
 </head>
 <body>
@@ -149,6 +157,12 @@
                                     <h5 class="mb-0">Your Evaluation</h5>
                                 </div>
                                 <div class="card-body">
+                                    {% if object.evaluation.is_unknown_object %}
+                                    <div class="alert alert-info mb-4">
+                                        <i class="bi bi-info-circle me-2"></i>
+                                        <strong>Unknown Object:</strong> You indicated that you did not know what this object is.
+                                    </div>
+                                    {% else %}
                                     <div class="mb-4">
                                         <h6>Accuracy:</h6>
                                         <div class="rating-display">
@@ -187,6 +201,7 @@
                                             {% endfor %}
                                         </div>
                                     </div>
+                                    {% endif %}
                                     
                                     {% if object.evaluation.comments %}
                                     <div class="mb-4">
