@@ -312,6 +312,25 @@ async def logout(request: Request):
     
     return RedirectResponse(url="/login")
 
+@app.get("/evaluate/{object_id}", response_class=HTMLResponse)
+async def evaluate_page(request: Request, object_id: str, user: Optional[User] = Depends(get_current_user)):
+    if not user:
+        return RedirectResponse(url="/login")
+    
+    # Get object details
+    async with httpx.AsyncClient() as client:
+        headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
+        response = await client.get(f"{API_URL}/api/objects/{object_id}", headers=headers)
+        if response.status_code != 200:
+            raise HTTPException(status_code=404, detail="Object not found")
+        
+        object_data = response.json().get("data", {})
+    
+    return templates.TemplateResponse(
+        "evaluate.html",
+        {"request": request, "user": user, "object": object_data}
+    )
+
 @app.post("/evaluate/{object_id}")
 async def submit_evaluation(
     request: Request,
