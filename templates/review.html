@@ -157,20 +157,36 @@
                                     <h5 class="mb-0">Your Evaluation</h5>
                                 </div>
                                 <div class="card-body">
+                                    <!-- Try multiple methods to find the user rating -->
                                     {% set is_unknown_object = false %}
                                     {% set user_rating = null %}
                                     
-                                    <!-- Find the user's rating -->
-                                    {% for rating in object.ratings %}
-                                        {% if rating.userId == user.userId %}
-                                            {% set user_rating = rating %}
-                                            {% if rating.metrics and rating.metrics.unknown_object %}
-                                                {% set is_unknown_object = true %}
-                                            {% endif %}
-                                            {# Do not use break in Jinja2, just continue with loop #}
-                                        {% endif %}
-                                    {% endfor %}
+                                    <!-- Method 1: Directly access user_ratings if present -->
+                                    {% if object.user_ratings %}
+                                        {% set user_rating = object.user_ratings %}
+                                    {% endif %}
                                     
+                                    <!-- Method 2: Loop through ratings to find current user's -->
+                                    {% if user_rating is none and object.ratings %}
+                                        {% for rating in object.ratings %}
+                                            <!-- Try multiple formats of user ID comparison -->
+                                            {% if rating.userId|string == user.userId|string or 
+                                                  rating.userId == user.userId or
+                                                  rating.user_id|default('') == user.userId %}
+                                                {% set user_rating = rating %}
+                                                {% if rating.metrics and rating.metrics.unknown_object %}
+                                                    {% set is_unknown_object = true %}
+                                                {% endif %}
+                                            {% endif %}
+                                        {% endfor %}
+                                    {% endif %}
+                                    
+                                    <!-- Alternative unknown_object check at the top level -->
+                                    {% if user_rating and user_rating.unknown_object %}
+                                        {% set is_unknown_object = true %}
+                                    {% endif %}
+                                    
+                                    <!-- Display appropriate content based on findings -->
                                     {% if is_unknown_object %}
                                     <div class="alert alert-info mb-4">
                                         <i class="bi bi-info-circle me-2"></i>
@@ -180,7 +196,7 @@
                                     <div class="mb-4">
                                         <h6>Accuracy:</h6>
                                         <div class="rating-display">
-                                            {% set accuracy = user_rating.accuracy|default(user_rating.score)|default(0) %}
+                                            {% set accuracy = user_rating.accuracy|default(user_rating.score)|default(0)|int %}
                                             {% for i in range(5) %}
                                                 {% if i < accuracy %}
                                                 <i class="bi bi-star-fill"></i>
@@ -194,7 +210,7 @@
                                     <div class="mb-4">
                                         <h6>Completeness:</h6>
                                         <div class="rating-display">
-                                            {% set completeness = user_rating.completeness|default(0) %}
+                                            {% set completeness = user_rating.completeness|default(0)|int %}
                                             {% for i in range(5) %}
                                                 {% if i < completeness %}
                                                 <i class="bi bi-star-fill"></i>
@@ -210,6 +226,8 @@
                                         <div class="mt-2">
                                             {% if user_rating.metrics and user_rating.metrics.hallucinated %}
                                                 <span class="badge bg-warning">Yes</span>
+                                            {% elsif user_rating.hallucinated %}
+                                                <span class="badge bg-warning">Yes</span>
                                             {% else %}
                                                 <span class="badge bg-success">No</span>
                                             {% endif %}
@@ -217,7 +235,22 @@
                                     </div>
                                     {% else %}
                                     <div class="alert alert-warning">
-                                        No evaluation data found for this object.
+                                        <strong>No evaluation data found for this object.</strong>
+                                        
+                                        <!-- Debug information to help troubleshoot -->
+                                        <div class="mt-3 small">
+                                            <strong>Debug Info:</strong><br>
+                                            User ID: {{ user.userId }}<br>
+                                            Ratings available: {{ object.ratings|length if object.ratings else 0 }}<br>
+                                            Object has assignments: {{ object.assignments|default([])|length > 0 }}<br>
+                                            {% if object.assignments|default([]) %}
+                                                {% for assignment in object.assignments %}
+                                                    {% if assignment.userId|string == user.userId|string and assignment.completedAt %}
+                                                        Assignment completed at: {{ assignment.completedAt }}
+                                                    {% endif %}
+                                                {% endfor %}
+                                            {% endif %}
+                                        </div>
                                     </div>
                                     {% endif %}
                                     
@@ -230,8 +263,8 @@
                                     
                                     <div class="text-muted">
                                         <small>
-                                            {% for assignment in object.assignments %}
-                                                {% if assignment.userId == user.userId and assignment.completedAt %}
+                                            {% for assignment in object.assignments|default([]) %}
+                                                {% if assignment.userId|string == user.userId|string and assignment.completedAt %}
                                                     Completed on {{ assignment.completedAt|string|truncate(16, true, "") }}
                                                 {% endif %}
                                             {% endfor %}
@@ -246,6 +279,21 @@
                                     <h5 class="mb-0">Admin Actions</h5>
                                 </div>
                                 <div class="card-body">
+                                    <button class="btn btn-outline-secondary mb-2 w-100" 
+                                            type="button" 
+                                            data-bs-toggle="collapse" 
+                                            data-bs-target="#rawDataCollapse" 
+                                            aria-expanded="false" 
+                                            aria-controls="rawDataCollapse">
+                                        View Raw Data
+                                    </button>
+                                    
+                                    <div class="collapse mb-3" id="rawDataCollapse">
+                                        <div class="card card-body">
+                                            <pre class="small">{{ object|tojson(indent=2) }}</pre>
+                                        </div>
+                                    </div>
+                                    
                                     <a href="#" class="btn btn-outline-warning mb-2 w-100">Edit Evaluation</a>
                                     <a href="#" class="btn btn-outline-danger w-100">Delete Evaluation</a>
                                 </div>
