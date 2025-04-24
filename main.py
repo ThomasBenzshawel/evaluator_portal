@@ -1105,6 +1105,54 @@ async def delete_user(
     
     return RedirectResponse(url="/admin?deleted=true", status_code=303)
 
+@app.get("/admin/reviews", response_class=HTMLResponse)
+async def admin_reviews_page(request: Request, user: Optional[User] = Depends(get_current_user)):
+    # Only allow admin users
+    if not user or user.role != "admin":
+        return RedirectResponse(url="/login")
+    
+    # Get all users with their reviews
+    users_with_reviews = []
+    
+    # First get all users
+    async with httpx.AsyncClient() as client:
+        headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
+        
+        # Get users
+        users_response = await client.get(f"{AUTH_URL}/users", headers=headers)
+        if users_response.status_code != 200:
+            return templates.TemplateResponse(
+                "admin_reviews.html",
+                {"request": request, "user": user, "users_with_reviews": [], "error": "Failed to fetch users"}
+            )
+        
+        users = users_response.json().get("data", [])
+        
+        # For each user, get their completed reviews
+        for user_item in users:
+            # Get completed evaluations for this user
+            completed_response = await client.post(
+                f"{API_URL}/api/completed",
+                json={"userId": user_item["userId"]},
+                headers=headers
+            )
+            
+            if completed_response.status_code == 200:
+                completed_data = completed_response.json().get("data", [])
+                
+                # Add to our list if they have any reviews
+                if completed_data:
+                    users_with_reviews.append({
+                        "user": user_item,
+                        "reviews": completed_data,
+                        "review_count": len(completed_data)
+                    })
+    
+    return templates.TemplateResponse(
+        "admin_reviews.html",
+        {"request": request, "user": user, "users_with_reviews": users_with_reviews}
+    )
+
 @app.get("/health")
 def health_check():
     return {"status": "ok"}

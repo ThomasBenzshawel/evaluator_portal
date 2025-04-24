@@ -167,7 +167,7 @@
                                             {% if rating.metrics and rating.metrics.unknown_object %}
                                                 {% set is_unknown_object = true %}
                                             {% endif %}
-                                            {% break %}
+                                            {# Do not use break in Jinja2, just continue with loop #}
                                         {% endif %}
                                     {% endfor %}
                                     
