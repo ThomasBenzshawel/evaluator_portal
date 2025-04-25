@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Edit Review - Objaverse Research Portal</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
+    <style>
+        body {
+            min-height: 100vh;
+            background-color: #f5f7fa;
+        }
+        .nav-link {
+            color: rgba(255, 255, 255, 0.85);
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            margin-bottom: 0.25rem;
+        }
+        .nav-link:hover, .nav-link.active {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: #ffffff;
+        }
+        .nav-link i {
+            width: 1.25rem;
+            text-align: center;
+            margin-right: 0.5rem;
+        }
+        .sidebar {
+            background-color: #1e3a8a;
+            min-width: 250px;
+        }
+        .logo {
+            max-width: 180px;
+        }
+        .card {
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+            border: none;
+        }
+        .object-image {
+            max-width: 100%;
+            border-radius: 0.375rem;
+        }
+        .rating-container {
+            display: inline-block;
+            direction: rtl;
+        }
+        .rating-container input {
+            display: none;
+        }
+        .rating-container label {
+            font-size: 1.5rem;
+            color: #ccc;
+            cursor: pointer;
+            padding: 0 0.1rem;
+        }
+        .rating-container label:hover,
+        .rating-container label:hover ~ label,
+        .rating-container input:checked ~ label {
+            color: #f8ce0a;
+        }
+        /* Fix for ratings to stay highlighted after selection */
+        .rating-container input:checked + label:hover,
+        .rating-container input:checked ~ label:hover,
+        .rating-container input:checked ~ label:hover ~ label,
+        .rating-container label:hover ~ input:checked ~ label {
+            color: #f8ce0a;
+        }
+        /* Custom carousel styling */
+        .custom-carousel-control {
+            background-color: #1e3a8a;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+        .custom-carousel-control:hover,
+        .custom-carousel-control:focus {
+            background-color: #1e3a8a;
+            opacity: 1;
+        }
+        .carousel-control-prev {
+            left: 10px;
+        }
+        .carousel-control-next {
+            right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <div class="row flex-nowrap">
+            <!-- Sidebar -->
+            <div class="sidebar col-auto d-flex flex-column flex-shrink-0 p-3 text-white">
+                <a href="/" class="d-flex align-items-center mb-md-0 me-md-auto text-white text-decoration-none">
+                    <img class="logo" src="/static/objaverse-logo-white.svg" alt="Objaverse Logo">
+                </a>
+                <hr>
+                <ul class="nav nav-pills flex-column mb-auto">
+                    <li class="nav-item">
+                        <a href="/" class="nav-link text-white">
+                            <i class="bi bi-house-door"></i>
+                            Dashboard
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/assignments" class="nav-link text-white">
+                            <i class="bi bi-list-check"></i>
+                            My Assignments
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/completed" class="nav-link text-white">
+                            <i class="bi bi-check2-circle"></i>
+                            Completed
+                        </a>
+                    </li>
+                    <li>
+                        <a href="/profile" class="nav-link text-white">
+                            <i class="bi bi-person"></i>
+                            Profile
+                        </a>
+                    </li>
+                    {% if user and user.role == 'admin' %}
+                    <li>
+                        <a href="/admin" class="nav-link active" aria-current="page">
+                            <i class="bi bi-gear"></i>
+                            Admin Panel
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+                <hr>
+                <div class="dropdown">
+                    <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle" id="dropdownUser1" data-bs-toggle="dropdown" aria-expanded="false">
+                        <img src="https://api.dicebear.com/7.x/initials/svg?seed={{ user.email }}" alt="User" width="32" height="32" class="rounded-circle me-2">
+                        <strong>{{ user.email }}</strong>
+                    </a>
+                    <ul class="dropdown-menu dropdown-menu-dark text-small shadow" aria-labelledby="dropdownUser1">
+                        <li><a class="dropdown-item" href="/profile">Profile</a></li>
+                        {% if user and user.role == 'admin' %}
+                        <li><a class="dropdown-item" href="/admin">Admin Panel</a></li>
+                        {% endif %}
+                        <li><hr class="dropdown-divider"></li>
+                        <li><a class="dropdown-item" href="/logout">Sign out</a></li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Main content -->
+            <div class="col py-3">
+                <div class="container">
+                    <!-- Header -->
+                    <div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-4 border-bottom">
+                        <h1 class="h2">Edit Review</h1>
+                        <div class="btn-toolbar mb-2 mb-md-0">
+                            <a href="/review/{{ object.objectId }}" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-arrow-left"></i> Back to Review
+                            </a>
+                        </div>
+                    </div>
+
+                    {% if error %}
+                    <div class="alert alert-danger" role="alert">
+                        {{ error }}
+                    </div>
+                    {% endif %}
+
+                    <div class="row">
+                        <div class="col-md-6 mb-4">
+                            <div class="card h-100">
+                                <div class="card-header">
+                                    <h5 class="mb-0">Object Details</h5>
+                                </div>
+                                <div class="card-body">
+                                    <h3 class="h5 mb-3">{{ object.category }}</h3>
+                                    <p class="text-muted mb-2">ID: <code>{{ object.objectId }}</code></p>
+                                    
+                                    {% if object.images and object.images|length > 0 %}
+                                    <div class="mb-4">
+                                        {% if object.images|length > 1 %}
+                                        <!-- Carousel for multiple images -->
+                                        <div id="objectImageCarousel" class="carousel slide" data-bs-ride="false">
+                                            <div class="carousel-indicators">
+                                                {% for image in object.images %}
+                                                <button type="button" data-bs-target="#objectImageCarousel" data-bs-slide-to="{{ loop.index0 }}" {% if loop.first %}class="active" aria-current="true"{% endif %} aria-label="Slide {{ loop.index }}"></button>
+                                                {% endfor %}
+                                            </div>
+                                            <div class="carousel-inner">
+                                                {% for image in object.images %}
+                                                <div class="carousel-item {% if loop.first %}active{% endif %}">
+                                                    <img src="{{ image.url }}" class="d-block w-100 object-image" alt="{{ object.category }} - Image {{ loop.index }}">
+                                                </div>
+                                                {% endfor %}
+                                            </div>
+                                            <button class="carousel-control-prev custom-carousel-control" type="button" data-bs-target="#objectImageCarousel" data-bs-slide="prev">
+                                                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                                                <span class="visually-hidden">Previous</span>
+                                            </button>
+                                            <button class="carousel-control-next custom-carousel-control" type="button" data-bs-target="#objectImageCarousel" data-bs-slide="next">
+                                                <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                                                <span class="visually-hidden">Next</span>
+                                            </button>
+                                        </div>
+                                        {% else %}
+                                        <!-- Single image display -->
+                                        <img src="{{ object.images[0].url }}" alt="{{ object.category }}" class="object-image">
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                    
+                                    <h6>Description:</h6>
+                                    <p>{{ object.description }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0">Edit Rating for User ID: {{ edit_user_id }}</h5>
+                                </div>
+                                <div class="card-body">
+                                    <form action="/admin/update_review/{{ object.objectId }}" method="post">
+                                        <!-- Hidden input for user ID -->
+                                        <input type="hidden" name="user_id" value="{{ edit_user_id }}">
+                                        
+                                        <div class="mb-4">
+                                            <label class="form-label">Accuracy (1-5) <span class="text-danger">*</span></label>
+                                            <div class="rating-container">
+                                                <input type="radio" id="accuracy-5" name="accuracy" value="5" {% if rating.accuracy|default(rating.score)|default(0)|int == 5 %}checked{% endif %}>
+                                                <label for="accuracy-5"><i class="bi bi-star-fill"></i></label>
+                                                <input type="radio" id="accuracy-4" name="accuracy" value="4" {% if rating.accuracy|default(rating.score)|default(0)|int == 4 %}checked{% endif %}>
+                                                <label for="accuracy-4"><i class="bi bi-star-fill"></i></label>
+                                                <input type="radio" id="accuracy-3" name="accuracy" value="3" {% if rating.accuracy|default(rating.score)|default(0)|int == 3 %}checked{% endif %}>
+                                                <label for="accuracy-3"><i class="bi bi-star-fill"></i></label>
+                                                <input type="radio" id="accuracy-2" name="accuracy" value="2" {% if rating.accuracy|default(rating.score)|default(0)|int == 2 %}checked{% endif %}>
+                                                <label for="accuracy-2"><i class="bi bi-star-fill"></i></label>
+                                                <input type="radio" id="accuracy-1" name="accuracy" value="1" {% if rating.accuracy|default(rating.score)|default(0)|int == 1 %}checked{% endif %}>
+                                                <label for="accuracy-1"><i class="bi bi-star-fill"></i></label>
+                                            </div>
+                                            <div class="form-text">How accurately does the description match the image?</div>
+                                        </div>
+                                        
+                                        <div class="mb-4">
+                                            <label class="form-label">Completeness (1-5) <span class="text-danger">*</span></label>
+                                            <div class="rating-container">
+                                                <input type="radio" id="completeness-5" name="completeness" value="5" {% if rating.completeness|default(0)|int == 5 %}checked{% endif %}>
+                                                <label for="completeness-5"><i class="bi bi-star-fill"></i></label>
+                                                <input type="radio" id="completeness-4" name="completeness" value="4" {% if rating.completeness|default(0)|int == 4 %}checked{% endif %}>
+                                                <label for="completeness-4"><i class="bi bi-star-fill"></i></label>
+                                                <input type="radio" id="completeness-3" name="completeness" value="3" {% if rating.completeness|default(0)|int == 3 %}checked{% endif %}>
+                                                <label for="completeness-3"><i class="bi bi-star-fill"></i></label>
+                                                <input type="radio" id="completeness-2" name="completeness" value="2" {% if rating.completeness|default(0)|int == 2 %}checked{% endif %}>
+                                                <label for="completeness-2"><i class="bi bi-star-fill"></i></label>
+                                                <input type="radio" id="completeness-1" name="completeness" value="1" {% if rating.completeness|default(0)|int == 1 %}checked{% endif %}>
+                                                <label for="completeness-1"><i class="bi bi-star-fill"></i></label>
+                                            </div>
+                                            <div class="form-text">How complete is the description of the object?</div>
+                                        </div>
+                                        
+                                        <div class="mb-4">
+                                            <label class="form-label">Did the LLM hallucinate? <span class="text-danger">*</span></label>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="hallucinated" id="hallucinated-yes" value="yes" 
+                                                    {% if rating.metrics and rating.metrics.hallucinated %}checked{% endif %}>
+                                                <label class="form-check-label" for="hallucinated-yes">
+                                                    Yes
+                                                </label>
+                                            </div>
+                                            <div class="form-check">
+                                                <input class="form-check-input" type="radio" name="hallucinated" id="hallucinated-no" value="no"
+                                                    {% if rating.metrics and rating.metrics.hallucinated is defined and not rating.metrics.hallucinated %}checked{% endif %}>
+                                                <label class="form-check-label" for="hallucinated-no">
+                                                    No
+                                                </label>
+                                            </div>
+                                            <div class="form-text">Does the description contain information that is not visible in the image?</div>
+                                        </div>
+                                        
+                                        <div class="mb-4">
+                                            <label for="comment" class="form-label">Comments</label>
+                                            <textarea class="form-control" id="comment" name="comment" rows="3">{{ rating.comment }}</textarea>
+                                            <div class="form-text">Optional additional comments about this evaluation.</div>
+                                        </div>
+                                        
+                                        <div class="d-flex justify-content-between">
+                                            <a href="/review/{{ object.objectId }}" class="btn btn-secondary">Cancel</a>
+                                            <button type="submit" class="btn btn-primary">Update Review</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                            
+                            <div class="card mt-4">
+                                <div class="card-header bg-info text-white">
+                                    <h5 class="mb-0">User Information</h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="row mb-2">
+                                        <div class="col-md-4 fw-bold">User ID:</div>
+                                        <div class="col-md-8"><code>{{ edit_user_id }}</code></div>
+                                    </div>
+                                    
+                                    {% for assignment in object.assignments|default([]) %}
+                                        {% if assignment.userId == edit_user_id %}
+                                        <div class="row mb-2">
+                                            <div class="col-md-4 fw-bold">Assigned At:</div>
+                                            <div class="col-md-8">{{ assignment.assignedAt }}</div>
+                                        </div>
+                                        {% if assignment.completedAt %}
+                                        <div class="row mb-2">
+                                            <div class="col-md-4 fw-bold">Completed At:</div>
+                                            <div class="col-md-8">{{ assignment.completedAt }}</div>
+                                        </div>
+                                        {% endif %}
+                                        {% endif %}
+                                    {% endfor %}
+                                    
+                                    {% if rating.timestamp %}
+                                    <div class="row mb-2">
+                                        <div class="col-md-4 fw-bold">Rating Timestamp:</div>
+                                        <div class="col-md-8">{{ rating.timestamp }}</div>
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

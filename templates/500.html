@@ -1,0 +1,21 @@
+{% extends "error_base.html" %}
+
+{% block title %}500 Server Error{% endblock %}
+
+{% block error_title %}Server Error{% endblock %}
+
+{% block error_code %}500{% endblock %}
+
+{% block error_icon %}<i class="bi bi-bug"></i>{% endblock %}
+
+{% block error_message %}Something went wrong on our end{% endblock %}
+
+{% block error_description %}
+We're experiencing some technical difficulties. Our team has been notified and is working to fix the issue. Please try again later.
+{% endblock %}
+
+{% block additional_buttons %}
+<a href="javascript:location.reload()" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-clockwise me-2"></i> Refresh Page
+</a>
+{% endblock %}

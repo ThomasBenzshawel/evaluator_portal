@@ -116,26 +116,22 @@
                             Profile
                         </a>
                     </li>
-                    {% if user and user.role == 'admin' %}
-                    <li>
+                    <li id="admin-panel-link" style="display: none;">
                         <a href="/admin" class="nav-link text-white">
                             <i class="bi bi-gear"></i>
                             Admin Panel
                         </a>
                     </li>
-                    {% endif %}
                 </ul>
                 <hr>
                 <div class="dropdown">
                     <a href="#" class="d-flex align-items-center text-white text-decoration-none dropdown-toggle" id="dropdownUser1" data-bs-toggle="dropdown" aria-expanded="false">
-                        <img src="https://api.dicebear.com/7.x/initials/svg?seed={{ user.email }}" alt="User" width="32" height="32" class="rounded-circle me-2">
-                        <strong>{{ user.email }}</strong>
+                        <img id="user-avatar" src="" alt="User" width="32" height="32" class="rounded-circle me-2">
+                        <strong id="user-email"></strong>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-dark text-small shadow" aria-labelledby="dropdownUser1">
                         <li><a class="dropdown-item" href="/profile">Profile</a></li>
-                        {% if user and user.role == 'admin' %}
-                        <li><a class="dropdown-item" href="/admin">Admin Panel</a></li>
-                        {% endif %}
+                        <li id="admin-dropdown-link" style="display: none;"><a class="dropdown-item" href="/admin">Admin Panel</a></li>
                         <li><hr class="dropdown-divider"></li>
                         <li><a class="dropdown-item" href="/logout">Sign out</a></li>
                     </ul>
@@ -162,44 +158,15 @@
                                     <h5 class="mb-0">Object Details</h5>
                                 </div>
                                 <div class="card-body">
-                                    <h3 class="h5 mb-3">{{ object.category }}</h3>
-                                    <p class="text-muted mb-2">ID: <code>{{ object.objectId }}</code></p>
+                                    <h3 class="h5 mb-3" id="object-category"></h3>
+                                    <p class="text-muted mb-2">ID: <code id="object-id"></code></p>
                                     
-                                    {% if object.images and object.images|length > 0 %}
-                                    <div class="mb-4">
-                                        <!-- Use a carousel for multiple images -->
-                                        {% if object.images|length > 1 %}
-                                        <div id="objectImageCarousel" class="carousel slide" data-bs-ride="false">
-                                            <div class="carousel-indicators">
-                                                {% for image in object.images %}
-                                                <button type="button" data-bs-target="#objectImageCarousel" data-bs-slide-to="{{ loop.index0 }}" {% if loop.first %}class="active" aria-current="true"{% endif %} aria-label="Slide {{ loop.index }}"></button>
-                                                {% endfor %}
-                                            </div>
-                                            <div class="carousel-inner">
-                                                {% for image in object.images %}
-                                                <div class="carousel-item {% if loop.first %}active{% endif %}">
-                                                    <img src="{{ image.url }}" class="d-block w-100 object-image" alt="{{ object.category }} - Image {{ loop.index }}">
-                                                </div>
-                                                {% endfor %}
-                                            </div>
-                                            <button class="carousel-control-prev custom-carousel-control" type="button" data-bs-target="#objectImageCarousel" data-bs-slide="prev">
-                                                <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-                                                <span class="visually-hidden">Previous</span>
-                                            </button>
-                                            <button class="carousel-control-next custom-carousel-control" type="button" data-bs-target="#objectImageCarousel" data-bs-slide="next">
-                                                <span class="carousel-control-next-icon" aria-hidden="true"></span>
-                                                <span class="visually-hidden">Next</span>
-                                            </button>
-                                        </div>
-                                        {% else %}
-                                        <!-- Single image display -->
-                                        <img src="{{ object.images[0].url }}" alt="{{ object.category }}" class="object-image">
-                                        {% endif %}
+                                    <div class="mb-4" id="images-container">
+                                        <!-- Images will be dynamically added here -->
                                     </div>
-                                    {% endif %}
                                     
                                     <h6>Description:</h6>
-                                    <p>{{ object.description }}</p>
+                                    <p id="object-description"></p>
                                 </div>
                             </div>
                         </div>
@@ -208,108 +175,12 @@
                                 <div class="card-header">
                                     <h5 class="mb-0">Your Evaluation</h5>
                                 </div>
-                                <div class="card-body">
-                                    {% if object.ratings %}
-                                        <!-- Simplified approach to find the current user's rating -->
-                                        {% set user_rating = None %}
-                                        {% set is_unknown_object = False %}
-                                        {% set latest_timestamp = "" %}
-                                        
-                                        <!-- Find the most recent rating for the current user -->
-                                        {% for rating in object.ratings %}
-                                            {% if rating.userId == user.userId %}
-                                                {% if not latest_timestamp or rating.timestamp > latest_timestamp %}
-                                                    {% set user_rating = rating %}
-                                                    {% set latest_timestamp = rating.timestamp %}
-                                                    
-                                                    <!-- Check if this is an unknown object -->
-                                                    {% if rating.metrics and rating.metrics.unknown_object %}
-                                                        {% set is_unknown_object = True %}
-                                                    {% endif %}
-                                                {% endif %}
-                                            {% endif %}
-                                        {% endfor %}
-                                        
-                                        <!-- Display appropriate content based on findings -->
-                                        {% if is_unknown_object %}
-                                            <div class="alert alert-info mb-4">
-                                                <i class="bi bi-info-circle me-2"></i>
-                                                <strong>Unknown Object:</strong> You indicated that you did not know what this object is.
-                                            </div>
-                                        {% elif user_rating %}
-                                            <div class="mb-4">
-                                                <h6>Accuracy:</h6>
-                                                <div class="rating-display">
-                                                    {% set accuracy = user_rating.accuracy|default(user_rating.score)|default(0)|int %}
-                                                    {% for i in range(5) %}
-                                                        {% if i < accuracy %}
-                                                        <i class="bi bi-star-fill"></i>
-                                                        {% else %}
-                                                        <i class="bi bi-star"></i>
-                                                        {% endif %}
-                                                    {% endfor %}
-                                                </div>
-                                            </div>
-                                            
-                                            <div class="mb-4">
-                                                <h6>Completeness:</h6>
-                                                <div class="rating-display">
-                                                    {% set completeness = user_rating.completeness|default(0)|int %}
-                                                    {% for i in range(5) %}
-                                                        {% if i < completeness %}
-                                                        <i class="bi bi-star-fill"></i>
-                                                        {% else %}
-                                                        <i class="bi bi-star"></i>
-                                                        {% endif %}
-                                                    {% endfor %}
-                                                </div>
-                                            </div>
-                                            
-                                            <div class="mb-4">
-                                                <h6>Hallucinated:</h6>
-                                                <div class="mt-2">
-                                                    {% if user_rating.metrics and user_rating.metrics.hallucinated is defined %}
-                                                        <span class="badge {% if user_rating.metrics.hallucinated %}bg-warning{% else %}bg-success{% endif %}">
-                                                            {{ "Yes" if user_rating.metrics.hallucinated else "No" }}
-                                                        </span>
-                                                    {% else %}
-                                                        <span class="badge bg-secondary">Not Specified</span>
-                                                    {% endif %}
-                                                </div>
-                                            </div>
-                                            
-                                            {% if user_rating.comment %}
-                                            <div class="mb-4">
-                                                <h6>Your Comments:</h6>
-                                                <p class="p-3 bg-light rounded">{{ user_rating.comment }}</p>
-                                            </div>
-                                            {% endif %}
-                                            
-                                            <div class="text-muted">
-                                                <small>
-                                                    {% for assignment in object.assignments|default([]) %}
-                                                        {% if assignment.userId == user.userId and assignment.completedAt %}
-                                                            Completed on {{ assignment.completedAt|string|truncate(16, true, "") }}
-                                                        {% endif %}
-                                                    {% endfor %}
-                                                </small>
-                                            </div>
-                                        {% else %}
-                                            <div class="alert alert-warning">
-                                                <strong>No evaluation data found for this user.</strong>
-                                                <p class="mt-2 mb-0">Your user ID: {{ user.userId }}</p>
-                                            </div>
-                                        {% endif %}
-                                    {% else %}
-                                        <div class="alert alert-warning">
-                                            <strong>No ratings found for this object.</strong>
-                                        </div>
-                                    {% endif %}
+                                <div class="card-body" id="evaluation-container">
+                                    <!-- Evaluation content will be dynamically added here -->
                                 </div>
                             </div>
                             
-                            {% if user.role == 'admin' %}
-                            <div class="card">
+                            <div class="card" id="admin-actions" style="display: none;">
                                 <div class="card-header bg-primary text-white">
                                     <h5 class="mb-0">Admin Actions</h5>
                                 </div>
@@ -325,19 +196,13 @@
                                     
                                     <div class="collapse mb-3" id="rawDataCollapse">
                                         <div class="card card-body">
-                                            <pre class="small">{{ object|tojson(indent=2) }}</pre>
+                                            <pre class="small" id="raw-data"></pre>
                                         </div>
                                     </div>
                                     
-                                    <!-- Edit button for each user rating -->
-                                    {% if object.ratings %}
-                                        {% for rating in object.ratings %}
-                                            <a href="/admin/edit_review/{{ object.objectId }}?user_id={{ rating.userId }}" 
-                                               class="btn btn-outline-warning mb-2 w-100">
-                                                Edit Rating for {{ rating.userId|truncate(10, True, '...') }}
-                                            </a>
-                                        {% endfor %}
-                                    {% endif %}
+                                    <div id="edit-ratings-container">
+                                        <!-- Edit buttons will be dynamically added here -->
+                                    </div>
                                     
                                     <!-- Delete button with modal confirmation -->
                                     <button type="button" class="btn btn-outline-danger w-100" data-bs-toggle="modal" data-bs-target="#deleteReviewModal">
@@ -356,31 +221,24 @@
                                                     <p>Are you sure you want to delete all ratings for this object?</p>
                                                     <p class="text-danger">This action cannot be undone.</p>
                                                     
-                                                    {% if object.ratings and object.ratings|length > 0 %}
                                                     <div class="mt-3">
                                                         <h6>Select User Rating to Delete:</h6>
-                                                        <form id="deleteRatingForm" action="/admin/delete_review/{{ object.objectId }}" method="post">
-                                                            <select class="form-select mb-3" name="user_id" required>
-                                                                {% for rating in object.ratings %}
-                                                                <option value="{{ rating.userId }}">
-                                                                    User: {{ rating.userId }} - Rating: {{ rating.accuracy|default(rating.score)|default(0) }}
-                                                                </option>
-                                                                {% endfor %}
+                                                        <form id="deleteRatingForm" method="post">
+                                                            <select class="form-select mb-3" name="user_id" required id="delete-rating-select">
+                                                                <!-- Options will be dynamically added here -->
                                                             </select>
                                                         </form>
                                                     </div>
-                                                    {% endif %}
                                                 </div>
                                                 <div class="modal-footer">
                                                     <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                                                    <button type="button" class="btn btn-danger" onclick="document.getElementById('deleteRatingForm').submit()">Delete Rating</button>
+                                                    <button type="button" class="btn btn-danger" id="delete-rating-btn">Delete Rating</button>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                 </div>
                             </div>
-                            {% endif %}
                         </div>
                     </div>
                 </div>
@@ -389,5 +247,256 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Get data from server
+        const objectData = {{object_json|safe}};
+        const userData = {{user_json|safe}};
+        const userRating = {{user_rating_json|safe}};
+        const completionDate = {{completion_date_json|safe}};
+        
+        document.addEventListener('DOMContentLoaded', function() {
+            // Populate object details
+            document.getElementById('object-id').textContent = objectData.objectId;
+            document.getElementById('object-category').textContent = objectData.category || 'Uncategorized';
+            document.getElementById('object-description').textContent = objectData.description || 'No description available';
+            
+            // Setup user info
+            document.getElementById('user-email').textContent = userData.email;
+            document.getElementById('user-avatar').src = `https://api.dicebear.com/7.x/initials/svg?seed=${userData.email}`;
+            
+            // Show admin links if user is admin
+            if (userData.role === 'admin') {
+                document.getElementById('admin-panel-link').style.display = 'block';
+                document.getElementById('admin-dropdown-link').style.display = 'block';
+                document.getElementById('admin-actions').style.display = 'block';
+                setupAdminFeatures();
+            }
+            
+            // Setup images
+            setupImages();
+            
+            // Setup user rating
+            setupEvaluation();
+        });
+        
+        function setupImages() {
+            const container = document.getElementById('images-container');
+            const images = objectData.images || [];
+            
+            if (images.length === 0) {
+                container.innerHTML = '<p class="text-muted">No images available</p>';
+                return;
+            }
+            
+            if (images.length === 1) {
+                // Single image
+                container.innerHTML = `<img src="${images[0].url}" alt="${objectData.category}" class="object-image">`;
+            } else {
+                // Multiple images - create carousel
+                let carouselHtml = `
+                <div id="objectImageCarousel" class="carousel slide" data-bs-ride="false">
+                    <div class="carousel-indicators">
+                `;
+                
+                // Add indicators
+                images.forEach((image, index) => {
+                    carouselHtml += `
+                    <button type="button" data-bs-target="#objectImageCarousel" data-bs-slide-to="${index}" 
+                        ${index === 0 ? 'class="active" aria-current="true"' : ''} aria-label="Slide ${index + 1}"></button>
+                    `;
+                });
+                
+                carouselHtml += `</div><div class="carousel-inner">`;
+                
+                // Add slides
+                images.forEach((image, index) => {
+                    carouselHtml += `
+                    <div class="carousel-item ${index === 0 ? 'active' : ''}">
+                        <img src="${image.url}" class="d-block w-100 object-image" alt="${objectData.category} - Image ${index + 1}">
+                    </div>
+                    `;
+                });
+                
+                // Add controls
+                carouselHtml += `
+                    </div>
+                    <button class="carousel-control-prev custom-carousel-control" type="button" data-bs-target="#objectImageCarousel" data-bs-slide="prev">
+                        <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+                        <span class="visually-hidden">Previous</span>
+                    </button>
+                    <button class="carousel-control-next custom-carousel-control" type="button" data-bs-target="#objectImageCarousel" data-bs-slide="next">
+                        <span class="carousel-control-next-icon" aria-hidden="true"></span>
+                        <span class="visually-hidden">Next</span>
+                    </button>
+                </div>
+                `;
+                
+                container.innerHTML = carouselHtml;
+            }
+        }
+        
+        function setupEvaluation() {
+            const container = document.getElementById('evaluation-container');
+            
+            if (!userRating) {
+                container.innerHTML = `
+                <div class="alert alert-warning">
+                    <strong>No evaluation data found for this user.</strong>
+                    <p class="mt-2 mb-0">Your user ID: ${userData.userId}</p>
+                </div>
+                `;
+                return;
+            }
+            
+            // Check if this is an unknown object
+            if (userRating.metrics && userRating.metrics.unknown_object) {
+                container.innerHTML = `
+                <div class="alert alert-info mb-4">
+                    <i class="bi bi-info-circle me-2"></i>
+                    <strong>Unknown Object:</strong> You indicated that you did not know what this object is.
+                </div>
+                `;
+                return;
+            }
+            
+            let html = '';
+            
+            // Accuracy rating
+            const accuracy = userRating.accuracy || userRating.score || 0;
+            html += `
+            <div class="mb-4">
+                <h6>Accuracy:</h6>
+                <div class="rating-display">
+            `;
+            
+            for (let i = 0; i < 5; i++) {
+                if (i < accuracy) {
+                    html += '<i class="bi bi-star-fill"></i>';
+                } else {
+                    html += '<i class="bi bi-star"></i>';
+                }
+            }
+            
+            html += `
+                </div>
+            </div>
+            `;
+            
+            // Completeness rating
+            const completeness = userRating.completeness || 0;
+            html += `
+            <div class="mb-4">
+                <h6>Completeness:</h6>
+                <div class="rating-display">
+            `;
+            
+            for (let i = 0; i < 5; i++) {
+                if (i < completeness) {
+                    html += '<i class="bi bi-star-fill"></i>';
+                } else {
+                    html += '<i class="bi bi-star"></i>';
+                }
+            }
+            
+            html += `
+                </div>
+            </div>
+            `;
+            
+            // Hallucinated flag
+            const hasHallucinatedMetric = userRating.metrics && userRating.metrics.hallucinated !== undefined;
+            html += `
+            <div class="mb-4">
+                <h6>Hallucinated:</h6>
+                <div class="mt-2">
+            `;
+            
+            if (hasHallucinatedMetric) {
+                const isHallucinated = userRating.metrics.hallucinated;
+                html += `
+                <span class="badge ${isHallucinated ? 'bg-warning' : 'bg-success'}">
+                    ${isHallucinated ? 'Yes' : 'No'}
+                </span>
+                `;
+            } else {
+                html += '<span class="badge bg-secondary">Not Specified</span>';
+            }
+            
+            html += `
+                </div>
+            </div>
+            `;
+            
+            // Comments
+            if (userRating.comment) {
+                html += `
+                <div class="mb-4">
+                    <h6>Your Comments:</h6>
+                    <p class="p-3 bg-light rounded">${userRating.comment}</p>
+                </div>
+                `;
+            }
+            
+            // Completion date
+            if (completionDate) {
+                const formattedDate = completionDate.substring(0, 16);
+                html += `
+                <div class="text-muted">
+                    <small>Completed on ${formattedDate}</small>
+                </div>
+                `;
+            }
+            
+            container.innerHTML = html;
+        }
+        
+        function setupAdminFeatures() {
+            // Set raw data
+            document.getElementById('raw-data').textContent = JSON.stringify(objectData, null, 2);
+            
+            // Set form action
+            document.getElementById('deleteRatingForm').action = `/admin/delete_review/${objectData.objectId}`;
+            
+            // Add click handler for delete button
+            document.getElementById('delete-rating-btn').addEventListener('click', function() {
+                document.getElementById('deleteRatingForm').submit();
+            });
+            
+            // Populate edit buttons
+            const editContainer = document.getElementById('edit-ratings-container');
+            const ratings = objectData.ratings || [];
+            
+            let editButtonsHtml = '';
+            for (const rating of ratings) {
+                const shortUserId = rating.userId.length > 10 ? 
+                    rating.userId.substring(0, 10) + '...' : 
+                    rating.userId;
+                
+                editButtonsHtml += `
+                <a href="/admin/edit_review/${objectData.objectId}?user_id=${rating.userId}" 
+                   class="btn btn-outline-warning mb-2 w-100">
+                    Edit Rating for ${shortUserId}
+                </a>
+                `;
+            }
+            
+            editContainer.innerHTML = editButtonsHtml;
+            
+            // Populate delete options
+            const deleteSelect = document.getElementById('delete-rating-select');
+            let deleteOptionsHtml = '';
+            
+            for (const rating of ratings) {
+                const ratingScore = rating.accuracy || rating.score || 0;
+                deleteOptionsHtml += `
+                <option value="${rating.userId}">
+                    User: ${rating.userId} - Rating: ${ratingScore}
+                </option>
+                `;
+            }
+            
+            deleteSelect.innerHTML = deleteOptionsHtml;
+        }
+    </script>
 </body>
 </html>

@@ -12,6 +12,7 @@ from starlette.middleware.sessions import SessionMiddleware
 import csv
 import io
 from dotenv import load_dotenv
+import json
 
 
 # Load environment variables
@@ -168,6 +169,63 @@ async def get_current_user(request: Request):
     except Exception:
         return None
     
+
+from fastapi import Request, status
+from fastapi.responses import HTMLResponse
+from fastapi.exceptions import HTTPException, RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+@app.exception_handler(404)
+async def not_found_exception_handler(request: Request, exc: HTTPException):
+    return templates.TemplateResponse(
+        "404.html",
+        {"request": request},
+        status_code=404
+    )
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    status_messages = {
+        404: "Not Found",
+        500: "Internal Server Error",
+    }
+    
+    if exc.status_code == 404:
+        # We have specific templates for these
+        template_name = f"{exc.status_code}.html"
+    elif exc.status_code == 500:
+        template_name = "500.html"
+    else:
+        # Use the general error template
+        template_name = "error.html"
+        
+    return templates.TemplateResponse(
+        template_name,
+        {
+            "request": request,
+            "status_code": exc.status_code,
+            "status_message": status_messages.get(exc.status_code, "Error"),
+            "detail": exc.detail
+        },
+        status_code=exc.status_code
+    )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    return templates.TemplateResponse(
+        "400.html",
+        {"request": request},
+        status_code=400
+    )
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    return templates.TemplateResponse(
+        "500.html",
+        {"request": request},
+        status_code=500
+    )
     
 # Routes
 @app.get("/", response_class=HTMLResponse)
@@ -484,11 +542,51 @@ async def review_object(request: Request, object_id: str, user: Optional[User] =
        
         object_data = response.json().get("data", {})
         
-   
-    return templates.TemplateResponse(
-        "review.html",
-        {"request": request, "user": user, "object": object_data}
-    )
+        # Preprocess the object data to eliminate duplicate ratings
+        if "ratings" in object_data and object_data["ratings"]:
+            # Create a dictionary to store the most complete rating for each user
+            user_ratings = {}
+            
+            for rating in object_data["ratings"]:
+                user_id = rating.get("userId")
+                if user_id not in user_ratings or len(rating.keys()) > len(user_ratings[user_id].keys()):
+                    user_ratings[user_id] = rating
+            
+            # Replace ratings with deduplicated list
+            object_data["ratings"] = list(user_ratings.values())
+        
+        # Process user rating for easier access in the template
+        current_user_rating = None
+        for rating in object_data.get("ratings", []):
+            if rating.get("userId") == user.userId:
+                current_user_rating = rating
+                break
+        
+        # Find completion date if available
+        completion_date = None
+        for assignment in object_data.get("assignments", []):
+            if assignment.get("userId") == user.userId and assignment.get("completedAt"):
+                completion_date = assignment.get("completedAt")
+                break
+                
+        # Prepare JSON data for the template
+        user_json = json.dumps({
+            "userId": user.userId,
+            "email": user.email,
+            "role": user.role
+        })
+        
+        # Add processed data to the context
+        context = {
+            "request": request, 
+            "user": user, 
+            "object_json": json.dumps(object_data),
+            "user_json": user_json,
+            "user_rating_json": json.dumps(current_user_rating),
+            "completion_date_json": json.dumps(completion_date)
+        }
+        
+    return templates.TemplateResponse("review.html", context)
 
 @app.post("/review/{object_id}")
 async def submit_review(
@@ -1262,16 +1360,16 @@ async def delete_review(
     # Check if user is admin
     if not user or user.role != "admin":
         return RedirectResponse(url="/login")
-    
+   
     # Delete rating in API
     async with httpx.AsyncClient() as client:
         headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
-        
+       
         response = await client.delete(
             f"{API_URL}/api/ratings/{object_id}/{user_id}",
             headers=headers
         )
-        
+       
         if response.status_code != 200 and response.status_code != 204:
             # If deletion fails, redirect to review page with error
             return templates.TemplateResponse(
@@ -1283,9 +1381,9 @@ async def delete_review(
                     "error": f"Failed to delete review: {response.text}"
                 }
             )
-    
-    # Redirect to completed evaluations page after successful deletion
-    return RedirectResponse(url="/completed", status_code=303)
+   
+    # Redirect to admin panel after successful deletion
+    return RedirectResponse(url="/admin", status_code=303)
 
 @app.get("/health")
 def health_check():

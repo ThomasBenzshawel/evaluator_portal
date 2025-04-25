@@ -1,0 +1,21 @@
+{% extends "error_base.html" %}
+
+{% block title %}{{ status_code }} Error{% endblock %}
+
+{% block error_title %}{{ status_message }}{% endblock %}
+
+{% block error_code %}{{ status_code }}{% endblock %}
+
+{% block error_icon %}<i class="bi bi-exclamation-circle"></i>{% endblock %}
+
+{% block error_message %}An error occurred{% endblock %}
+
+{% block error_description %}
+{{ detail }}
+{% endblock %}
+
+{% block additional_buttons %}
+<a href="javascript:history.back()" class="btn btn-outline-secondary">
+    <i class="bi bi-arrow-left me-2"></i> Go Back
+</a>
+{% endblock %}
