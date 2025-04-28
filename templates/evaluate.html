@@ -299,7 +299,7 @@
                                             <button type="button" class="btn btn-outline-secondary" id="unknownObjectBtn">
                                                 I don't know what this object is
                                             </button>
-                                            <div class="form-text">Click this if you cannot identify what the object is supposed to be.</div>
+                                            <div class="form-text">Click this if you cannot identify what the object is supposed to be AFTER reviewing all 6 images.</div>
                                         </div>
                                                 
                                         <button type="submit" class="btn btn-primary" id="submitBtn">Submit Evaluation</button>
@@ -324,7 +324,7 @@
                 // Get reference to the form element - this was missing before
                 const form = document.getElementById('evaluationForm');
                 
-                if (confirm('Are you sure you cannot identify this object? This will mark the evaluation as "unknown" and move to the next assignment.')) {
+                if (confirm('Are you sure you cannot identify this object? This will mark the evaluation as "unknown", flag it for review by the administrator, and move to the next assignment.')) {
                     // Add a hidden field to the form to indicate the object is unknown
                     const hiddenField = document.createElement('input');
                     hiddenField.type = 'hidden';
