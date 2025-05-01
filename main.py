@@ -13,6 +13,7 @@ import csv
 import io
 from dotenv import load_dotenv
 import json
+import time
 
 
 # Load environment variables
@@ -415,10 +416,23 @@ async def submit_evaluation(
     hallucinated: str = Form(None),
     unknown_object: str = Form(None),
     comments: str = Form(""),
+    pageLoadTime: str = Form(None),  # Add this parameter
     user: Optional[User] = Depends(get_current_user)
 ):
     if not user:
         return RedirectResponse(url="/login")
+    
+    # Calculate time spent on page (in seconds)
+    time_spent = None
+    if pageLoadTime:
+        try:
+            # Convert to milliseconds and divide by 1000 to get seconds
+            page_load_timestamp = int(pageLoadTime)
+            current_time = int(time.time() * 1000)  # Current time in milliseconds
+            time_spent = (current_time - page_load_timestamp) / 1000  # Time in seconds
+            print(f"User spent {time_spent:.2f} seconds on evaluation page for object {object_id}")
+        except ValueError:
+            print(f"Invalid timestamp value: {pageLoadTime}")
     
     # Check if the user indicated they don't know what the object is
     if unknown_object == "true":
@@ -430,7 +444,8 @@ async def submit_evaluation(
             rating_data = {
                 "score": 1,  # Use minimum score since API requires 1-5
                 "metrics": {
-                    "unknown_object": True
+                    "unknown_object": True,
+                    "time_spent_seconds": time_spent  # Add time spent metric
                 },
                 "comment": "Evaluator indicated they do not know what this object is."
             }
@@ -494,7 +509,8 @@ async def submit_evaluation(
             "metrics": {
                 "accuracy": accuracy,
                 "completeness": completeness,
-                "hallucinated": hallucinated == "yes"
+                "hallucinated": hallucinated == "yes",
+                "time_spent_seconds": time_spent  # Add time spent metric
             },
             "comment": comments if comments else None
         }
@@ -1044,23 +1060,42 @@ async def export_objects_csv(request: Request, user: Optional[User] = Depends(ge
         # Calculate unknown object stats
         total_evaluations = len(obj.get("ratings", []))
         unknown_count = 0
+        hallucinated_count = 0
+        total_time_spent = 0
         
         for rating in obj.get("ratings", []):
             if rating.get("metrics", {}).get("unknown_object", False):
                 unknown_count += 1
+            if rating.get("metrics", {}).get("hallucinated", False):
+                hallucinated_count += 1
+            if rating.get("metrics", {}).get("time_spent_seconds", None):
+                total_time_spent += rating.get("metrics", {}).get("time_spent_seconds", 0)
+        
         
         unknown_percent = 0
+        hallucinated_percent = 0
+        time_spent_avg = total_time_spent
         if total_evaluations > 0:
             unknown_percent = round((unknown_count / total_evaluations) * 100, 1)
+            hallucinated_percent = round((hallucinated_count / total_evaluations) * 100, 1)
+
+            time_spent_avg = round((total_time_spent / total_evaluations), 1)
+
+        average_ratings = obj.get("averageRatings", {})
             
         writer.writerow({
             "objectId": obj.get("objectId", ""),
             "description": obj.get("description", "")[:100] + "..." if obj.get("description", "") else "",  # Truncate long descriptions
             "category": obj.get("category", ""),
-            "averageRating": obj.get("averageRating", ""),
+            "averageAccuracy": average_ratings.get("accuracy", 0),
+            "averageCompleteness": average_ratings.get("completeness", 0),
+            "averageClarity": average_ratings.get("clarity", 0),
             "totalEvaluations": total_evaluations,
             "unknownCount": unknown_count,
             "unknownPercent": f"{unknown_percent}%",
+            "hallucinatedCount": hallucinated_count,
+            "hallucinatedPercent": f"{hallucinated_percent}%",
+            "timeSpentAvg": time_spent_avg,
             "createdAt": obj.get("createdAt", "")
         })
    
