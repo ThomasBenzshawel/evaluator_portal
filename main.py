@@ -14,6 +14,11 @@ import io
 from dotenv import load_dotenv
 import json
 import time
+from fastapi import Request, status
+from fastapi.responses import HTMLResponse
+from fastapi.exceptions import HTTPException, RequestValidationError
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
 
 
 # Load environment variables
@@ -170,12 +175,7 @@ async def get_current_user(request: Request):
     except Exception:
         return None
     
-
-from fastapi import Request, status
-from fastapi.responses import HTMLResponse
-from fastapi.exceptions import HTTPException, RequestValidationError
-from starlette.exceptions import HTTPException as StarletteHTTPException
-
+# Error handling
 @app.exception_handler(404)
 async def not_found_exception_handler(request: Request, exc: HTTPException):
     return templates.TemplateResponse(
@@ -338,7 +338,7 @@ async def home(request: Request, user: Optional[User] = Depends(get_current_user
             "recent_completed": recent_completed
         }
     )
-
+# this is a redirect to the favicon to avoid error messages in the console
 @app.get('/favicon.ico', include_in_schema=False)
 async def favicon():
     return RedirectResponse('/static/favicon.ico')
@@ -349,6 +349,8 @@ async def login_page(request: Request, user: Optional[User] = Depends(get_curren
         return RedirectResponse(url="/")
     
     return templates.TemplateResponse("login.html", {"request": request})
+
+# Login route
 @app.post("/login")
 async def login(request: Request, email: str = Form(...), password: str = Form(...)):
     # Call auth service to get token
@@ -388,6 +390,7 @@ async def logout(request: Request):
     
     return RedirectResponse(url="/login")
 
+# get the info for the object to evaluate
 @app.get("/evaluate/{object_id}", response_class=HTMLResponse)
 async def evaluate_page(request: Request, object_id: str, user: Optional[User] = Depends(get_current_user)):
     if not user:
@@ -407,6 +410,7 @@ async def evaluate_page(request: Request, object_id: str, user: Optional[User] =
         {"request": request, "user": user, "object": object_data}
     )
 
+# big function to submit the evaluation
 @app.post("/evaluate/{object_id}")
 async def submit_evaluation(
     request: Request,
@@ -544,6 +548,7 @@ async def submit_evaluation(
     
     return RedirectResponse(url="/", status_code=303)
 
+# get the info for the object to review
 @app.get("/review/{object_id}", response_class=HTMLResponse)
 async def review_object(request: Request, object_id: str, user: Optional[User] = Depends(get_current_user)):
     if not user:
@@ -604,6 +609,7 @@ async def review_object(request: Request, object_id: str, user: Optional[User] =
         
     return templates.TemplateResponse("review.html", context)
 
+# Submit review route
 @app.post("/review/{object_id}")
 async def submit_review(
     request: Request,
@@ -657,7 +663,7 @@ async def submit_review(
     
     return RedirectResponse(url="/", status_code=303)
 
-# Assignments route to match the sidebar link
+# Assignments route for sidebar link
 @app.get("/assignments", response_class=HTMLResponse)
 async def assignments_page(request: Request, user: Optional[User] = Depends(get_current_user)):
     if not user:
@@ -708,24 +714,6 @@ async def completed_page(request: Request, user: Optional[User] = Depends(get_cu
         "completed.html",
         {"request": request, "user": user, "evaluations": evaluations}
     )
-
-# @app.post("/completed", response_model=List[Dict[str, Any]])
-# async def get_completed_evaluations(request: Request, user: Optional[User] = Depends(get_current_user)):
-#     if not user:
-#         return RedirectResponse(url="/login")
-    
-#     # Get completed evaluations for the user
-#     async with httpx.AsyncClient() as client:
-#         headers = {"Authorization": f"Bearer {request.session.get('access_token')}"}
-#         response = await client.post(f"{API_URL}/api/completed", json={"userId": user.userId}, headers=headers)
-#         if response.status_code != 200:
-#             raise HTTPException(status_code=404, detail="Completed evaluations not found")
-        
-#         evaluations = response.json().get("data", [])
-    
-#     print(f"Completed evaluations: {evaluations}")
-#     return evaluations
-
 
 @app.get("/completed/{evaluation_id}", response_model=Dict[str, Any])
 async def get_completed_evaluation(request: Request, evaluation_id: str, user: Optional[User] = Depends(get_current_user)):
@@ -854,7 +842,7 @@ async def create_user(
     
     return RedirectResponse(url="/admin", status_code=303)
 
-# New route for uploading CSV to assign models
+# Upload CSV to assign models
 @app.post("/admin/upload_assignments")
 async def upload_assignments_csv(
     request: Request,
@@ -924,7 +912,7 @@ async def upload_assignments_csv(
         }
     )
 
-# Export users to CSV
+# Export users to CSV (used to help our assignment process)
 @app.get("/admin/export_users")
 async def export_users_csv(request: Request, user: Optional[User] = Depends(get_current_user)):
     if not user or user.role != "admin":
