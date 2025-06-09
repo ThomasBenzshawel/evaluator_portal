@@ -1035,10 +1035,15 @@ async def export_objects_csv(request: Request, user: Optional[User] = Depends(ge
         "objectId", 
         "description", 
         "category", 
-        "averageRating", 
+        "averageAccuracy",          # Fixed: was "averageRating"
+        "averageCompleteness",      # Added: missing field
+        "averageClarity",           # Added: missing field
         "totalEvaluations", 
         "unknownCount", 
-        "unknownPercent", 
+        "unknownPercent",
+        "hallucinatedCount",        # Added: missing field
+        "hallucinatedPercent",      # Added: missing field
+        "timeSpentAvg",             # Added: missing field
         "createdAt"
     ]
     writer = csv.DictWriter(output, fieldnames=fieldnames)
@@ -1066,7 +1071,6 @@ async def export_objects_csv(request: Request, user: Optional[User] = Depends(ge
         if total_evaluations > 0:
             unknown_percent = round((unknown_count / total_evaluations) * 100, 1)
             hallucinated_percent = round((hallucinated_count / total_evaluations) * 100, 1)
-
             time_spent_avg = round((total_time_spent / total_evaluations), 1)
 
         average_ratings = obj.get("averageRatings", {})
